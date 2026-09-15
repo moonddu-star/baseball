@@ -116,8 +116,8 @@ function releasePoint() {
   const stage = surface.getBoundingClientRect();
   return { x: anchor.left - stage.left, y: anchor.top - stage.top };
 }
-function swingBat(target, lead, follow, miss, row) {
-  return batRig.play(target, lead, follow, miss, row);
+function swingBat(target, lead, follow, miss, row, column) {
+  return batRig.play(target, lead, follow, miss, row, column);
 }
 function syncBatClock(animation, startTime) {
   if (animation) animation.startTime = startTime;
@@ -179,15 +179,15 @@ async function swing(i) {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const quick = $('motion-mode').value === 'quick';
   const timing = reduce ? { wind: 0, release: 0, flight: 0, follow: 0 } : quick
-    ? { wind: 85, release: 25, flight: 180, follow: 180 }
-    : { wind: 190, release: 55, flight: 360, follow: 340 };
+    ? { wind: 85, release: 25, flight: 180, follow: 110 }
+    : { wind: 190, release: 55, flight: 360, follow: 160 };
   busy = true; render(); tiles[i].classList.add('targeted');
   surface.dataset.phase = 'windup'; message('선택한 코스로 공이 들어옵니다…');
   const rect = tiles[i].getBoundingClientRect(), parent = surface.getBoundingClientRect();
   const target = { x: rect.left + rect.width / 2 - parent.left, y: rect.top + rect.height / 2 - parent.top };
   let batAnimation = null;
   try {
-    batAnimation = swingBat(target, timing.wind + timing.release + timing.flight, timing.follow, game.hazards.has(i), Math.floor(i / 5));
+    batAnimation = swingBat(target, timing.wind + timing.release + timing.flight, timing.follow, game.hazards.has(i), Math.floor(i / 5), i % 5);
     pitcherFrame(reduce ? 0 : 1); await pause(timing.wind);
     pitcherFrame(reduce ? 0 : 2); await pause(timing.release);
     const origin = releasePoint();

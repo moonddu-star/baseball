@@ -5,11 +5,7 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const smooth = t => { t = clamp(t, 0, 1); return t*t*(3-2*t); };
   const V = (x=0,y=0,z=0) => new T.Vector3(x,y,z);
-  const PROFILES = {
-    high: { loadLift: .02, finishLift: .14, sweep: 126 },
-    middle: { loadLift: .03, finishLift: .24, sweep: 136 },
-    low: { loadLift: .04, finishLift: .34, sweep: 146 }
-  };
+  const radians = degrees => degrees*Math.PI/180;
   class BaseballSwing {
     constructor(canvas, surface) {
       this.canvas = canvas; this.surface = surface; this.active = null;
@@ -88,28 +84,34 @@
       if(this.renderer){this.renderer.setPixelRatio(dpr);this.renderer.setSize(this.width,this.height,false);}
       else if(this.context){this.canvas.width=Math.round(this.width*dpr);this.canvas.height=Math.round(this.height*dpr);this.dpr=dpr;}
     }
-    configure(target,lead,follow,miss,row){
-      const name=row<2?'high':row===2?'middle':'low', profile=PROFILES[name];
+    configure(target,lead,follow,miss,row,column=2){
+      const vertical=clamp((row-2)/2,-1,1),horizontal=clamp((column-2)/2,-1,1);
+      const name=row<2?'high':row===2?'middle':'low';
+      // Blend all five rows and columns: high pitches use a raised barrel, low ones a dropped barrel.
+      const profile={loadLift:.03+.01*vertical,finishLift:.24+.12*vertical,sweep:136+12*vertical-6*horizontal};
       const point={x:target.x/this.width,y:target.y/this.width};
       // Place the end-face center on the ball; the handle may stay outside the frame.
-      const yaw=25*Math.PI/180,dy=Math.sin(12*Math.PI/180);
+      // Right-side pitches use a longer projected reach; left-side pitches stay more closed.
+      const yaw=radians(25-8*horizontal),dy=Math.sin(radians(7-13*vertical));
+      const gripForward=.038-.008*horizontal,gripRise=.013+.004*vertical;
+      const attackAngle=18+5*vertical-2*horizontal;
       const pivot={
         x:point.x-this.length*Math.sqrt(1-dy*dy)*Math.cos(yaw),
         y:point.y+(miss?.055:0)+this.length*dy
       };
-      // An 18-degree screen-space rise at impact; the yaw derivative matches across contact.
-      const horizontal=Math.sqrt(1-dy*dy),attack=Math.tan(18*Math.PI/180);
-      const forward=.038+this.length*(48*Math.PI/180)*horizontal*Math.sin(yaw);
-      const coupling=this.length*dy*Math.cos(yaw)/horizontal;
-      const contactRise=(attack*forward-.013)/(this.length+attack*coupling);
-      const config={point,pivot,profile,name,lead,follow,miss,dy,yaw,contactRise,ratio:this.ratio,length:this.length};
+      // Solve the upward impact tangent independently of the barrel's pitch and reach.
+      const projected=Math.sqrt(1-dy*dy),attack=Math.tan(radians(attackAngle));
+      const forward=gripForward+this.length*radians(48)*projected*Math.sin(yaw);
+      const coupling=this.length*dy*Math.cos(yaw)/projected;
+      const contactRise=(attack*forward-gripRise)/(this.length+attack*coupling);
+      const swingDuration=Math.min(lead,140,follow*.90),swingStart=lead-swingDuration;
+      const config={point,pivot,profile,name,row,column,lead,follow,miss,dy,yaw,contactRise,gripForward,gripRise,attackAngle,swingDuration,swingStart,ratio:this.ratio,length:this.length};
       const table=(from,to)=>{const values=[];let distance=0,previous;for(let i=0;i<=180;i++){const q=from+(to-from)*i/180,pose=this.pose(config,q);if(previous)distance+=Math.hypot(pose.sweet.x-previous.x,pose.sweet.y-previous.y);values.push({q,distance});previous=pose.sweet;}return{values,distance};};
       config.approach=table(-1,0);config.finish=table(0,1);
       // Keep the loaded pose hidden, then reveal only once the bat is visibly moving.
-      config.revealTime=lead*.62+lead*.38*.30;
-      config.revealDuration=Math.min(24,lead*.38*.12);
+      config.revealTime=swingStart+swingDuration*.30;
+      config.revealDuration=Math.min(16,swingDuration*.12);
       // Preserve contact speed, then retain momentum until the bat has left the frame.
-      const swingDuration=lead*.38;
       config.contactSpeed=3*config.approach.distance/swingDuration;
       config.entryRate=config.contactSpeed*follow/config.finish.distance;
       config.exitRate=.75;
@@ -127,8 +129,8 @@
     }
     pose(g,q){
       const contact=q>=0;
-      const x=g.pivot.x+.038*q-(contact?.070*q*q:0);
-      const y=g.pivot.y-.013*q+(contact?-.045:.022)*q*q;
+      const x=g.pivot.x+g.gripForward*q-(contact?.070*q*q:0);
+      const y=g.pivot.y-g.gripRise*q+(contact?-.045:.022)*q*q;
       // Approach below contact, then carry the end of the bat upward through the ball.
       const cy=g.dy+g.contactRise*q+(contact?g.profile.finishLift:g.profile.loadLift+g.contactRise)*q*q;
       const turn=48*q+(contact?(g.profile.sweep-48)*q*q:0);
@@ -148,7 +150,7 @@
       const a=values[low],b=values[high];return a.q+(b.q-a.q)*(d-a.distance)/(b.distance-a.distance||1);
     }
     sample(g,time){
-      const start=g.lead*.62;let q=-1;
+      const start=g.swingStart;let q=-1;
       if(time>start&&time<=g.lead)q=this.progress(g.approach,Math.pow((time-start)/(g.lead-start),3));
       else if(time>g.lead){
         const t=clamp((time-g.lead)/g.follow,0,1);
@@ -170,11 +172,12 @@
       const normal=p.direction.clone().cross(up).normalize();
       this.root.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(p.direction,up,normal));
       this.root.updateMatrixWorld(true);
-      const inContact=time>g.lead-45&&time<g.lead+75;
+      const trailDuration=Math.min(18,g.swingDuration*.12);
+      const inContact=time>g.lead-trailDuration&&time<g.lead+g.follow*.24;
       this.trail.visible=inContact&&p.alpha>0;
-      if(inContact){const points=[];for(let offset=28;offset>=0;offset-=4)points.push(this.sample(g,Math.max(0,time-offset)).sweet);this.trailGeometry.setFromPoints(points);this.trail.material.opacity=.14;}
+      if(inContact){const points=[];for(let offset=trailDuration;offset>=0;offset-=trailDuration/6)points.push(this.sample(g,Math.max(0,time-offset)).sweet);this.trailGeometry.setFromPoints(points);this.trail.material.opacity=.14;}
       this.canvas.style.opacity=String(p.alpha);
-      this.canvas.dataset.profile=g.name;this.canvas.dataset.phase=time<g.lead*.62?'load':time<g.lead?'swing':'follow';
+      this.canvas.dataset.profile=g.name;this.canvas.dataset.zone=g.row+','+g.column;this.canvas.dataset.phase=time<g.swingStart?'load':time<g.lead?'swing':'follow';
       if(this.renderer)this.renderer.render(this.scene,this.camera);else this.drawSoftware();
       this.lastPose=p;
     }
@@ -187,9 +190,9 @@
       });
       faces.sort((a,b)=>a.z-b.z);for(const face of faces){ctx.beginPath();face.v.forEach((v,i)=>{const x=v.x*w,y=(this.ratio-v.y)*w;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.closePath();ctx.fillStyle=face.color;ctx.fill();}
     }
-    play(target,lead,follow,miss,row){
+    play(target,lead,follow,miss,row,column=2){
       this.cancel();if(!lead&&!follow)return null;
-      this.resize();const config=this.configure(target,lead,follow,miss,row),rig=this;
+      this.resize();const config=this.configure(target,lead,follow,miss,row,column),rig=this;
       let start=document.timeline.currentTime,paused=false,held=0,frame=0,done=false,resolve;
       const finished=new Promise(r=>resolve=r);
       const controller={config,contactTime:lead,companions:[],finished,
