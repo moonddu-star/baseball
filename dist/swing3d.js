@@ -88,7 +88,7 @@
       const vertical=clamp((row-2)/2,-1,1),horizontal=clamp((column-2)/2,-1,1);
       const name=row<2?'high':row===2?'middle':'low';
       // Blend all five rows and columns: high pitches use a raised barrel, low ones a dropped barrel.
-      const profile={loadLift:.03+.01*vertical,finishLift:.24+.12*vertical,sweep:136+12*vertical-6*horizontal};
+      const profile={finishLift:.12+.04*vertical,sweep:136+8*vertical-4*horizontal};
       const point={x:target.x/this.width,y:target.y/this.width};
       // Place the end-face center on the ball; the handle may stay outside the frame.
       // Right-side pitches use a longer projected reach; left-side pitches stay more closed.
@@ -104,13 +104,14 @@
       const forward=gripForward+this.length*radians(48)*projected*Math.sin(yaw);
       const coupling=this.length*dy*Math.cos(yaw)/projected;
       const contactRise=(attack*forward-gripRise)/(this.length+attack*coupling);
-      const swingDuration=Math.min(lead,140,follow*.90),swingStart=lead-swingDuration;
+      const swingDuration=Math.min(lead,120),swingStart=lead-swingDuration;
       const config={point,pivot,profile,name,row,column,lead,follow,miss,dy,yaw,contactRise,gripForward,gripRise,attackAngle,swingDuration,swingStart,ratio:this.ratio,length:this.length};
-      const table=(from,to)=>{const values=[];let distance=0,previous;for(let i=0;i<=180;i++){const q=from+(to-from)*i/180,pose=this.pose(config,q);if(previous)distance+=Math.hypot(pose.sweet.x-previous.x,pose.sweet.y-previous.y);values.push({q,distance});previous=pose.sweet;}return{values,distance};};
+      // Use world-space distance so foreshortening cannot produce an angular-speed spike.
+      const table=(from,to)=>{const values=[];let distance=0,previous;for(let i=0;i<=180;i++){const q=from+(to-from)*i/180,pose=this.pose(config,q);if(previous)distance+=pose.sweet.distanceTo(previous);values.push({q,distance});previous=pose.sweet;}return{values,distance};};
       config.approach=table(-1,0);config.finish=table(0,1);
       // Keep the loaded pose hidden, then reveal only once the bat is visibly moving.
-      config.revealTime=swingStart+swingDuration*.30;
-      config.revealDuration=Math.min(16,swingDuration*.12);
+      config.revealTime=lead-Math.min(lead,80);
+      config.revealDuration=12;
       // Preserve contact speed, then retain momentum until the bat has left the frame.
       config.contactSpeed=3*config.approach.distance/swingDuration;
       config.entryRate=config.contactSpeed*follow/config.finish.distance;
@@ -130,9 +131,9 @@
     pose(g,q){
       const contact=q>=0;
       const x=g.pivot.x+g.gripForward*q-(contact?.070*q*q:0);
-      const y=g.pivot.y-g.gripRise*q+(contact?-.045:.022)*q*q;
+      const y=g.pivot.y-g.gripRise*q-(contact?.032*q*q:0);
       // Approach below contact, then carry the end of the bat upward through the ball.
-      const cy=g.dy+g.contactRise*q+(contact?g.profile.finishLift:g.profile.loadLift+g.contactRise)*q*q;
+      const cy=g.dy+g.contactRise*q+(contact?g.profile.finishLift*q*q:0);
       const turn=48*q+(contact?(g.profile.sweep-48)*q*q:0);
       const yaw=g.yaw-turn*Math.PI/180;
       const dx=Math.sqrt(Math.max(0,1-cy*cy))*Math.cos(yaw);
@@ -160,7 +161,7 @@
         q=this.progress(g.finish,distance);
       }
       const pose=this.pose(g,q);
-      pose.alpha=smooth((time-g.revealTime)/g.revealDuration)*(1-smooth((time-g.lead-g.follow*.30)/(g.follow*.60)));
+      pose.alpha=smooth((time-g.revealTime)/g.revealDuration)*(1-smooth((time-g.lead-g.follow*.375)/(g.follow*.625)));
       return pose;
     }
     draw(g,time){

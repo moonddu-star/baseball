@@ -179,8 +179,8 @@ async function swing(i) {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const quick = $('motion-mode').value === 'quick';
   const timing = reduce ? { wind: 0, release: 0, flight: 0, follow: 0 } : quick
-    ? { wind: 85, release: 25, flight: 180, follow: 110 }
-    : { wind: 190, release: 55, flight: 360, follow: 160 };
+    ? { wind: 85, release: 25, flight: 180, follow: 120 }
+    : { wind: 190, release: 55, flight: 360, follow: 120 };
   busy = true; render(); tiles[i].classList.add('targeted');
   surface.dataset.phase = 'windup'; message('선택한 코스로 공이 들어옵니다…');
   const rect = tiles[i].getBoundingClientRect(), parent = surface.getBoundingClientRect();
