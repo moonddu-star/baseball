@@ -94,10 +94,53 @@ function flash(text, red = false) {
   void el.offsetWidth; el.classList.add('show');
 }
 function clearEffects() {
-  [$('pitch'), $('contact')].forEach(el => { el.getAnimations().forEach(animation => animation.cancel()); el.style.opacity = '0'; });
-  $('feedback').classList.remove('show'); pitcherFrame(0);
+  [$('pitch'), $('contact'), $('bat'), $('pitcher-ghost')].forEach(el => { el.getAnimations().forEach(animation => animation.cancel()); el.style.opacity = '0'; });
+  $('feedback').classList.remove('show'); surface.dataset.phase = 'idle'; pitcherFrame(0, false); $('pitcher-ghost').getAnimations().forEach(a => a.cancel()); $('pitcher-ghost').style.opacity = '0';
 }
-function pitcherFrame(frame) { $('pitcher').style.backgroundPosition = (frame / 3 * 100) + '% center'; }
+function pitcherFrame(frame, blend = true) {
+  const actor = $('pitcher'), ghost = $('pitcher-ghost');
+  const previous = Number(actor.dataset.frame || 0);
+  actor.dataset.frame = String(frame);
+  ghost.getAnimations().forEach(a => a.cancel());
+  ghost.style.opacity = '0';
+  if (blend && previous !== frame && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    ghost.style.backgroundPosition = (previous / 3 * 100) + '% center';
+    ghost.animate([{ opacity: .8 }, { opacity: 0 }], { duration: 65, easing: 'ease-out' });
+  }
+  actor.style.backgroundPosition = (frame / 3 * 100) + '% center';
+}
+function releasePoint() {
+  const anchor = $('release-point').getBoundingClientRect();
+  const stage = surface.getBoundingClientRect();
+  return { x: anchor.left - stage.left, y: anchor.top - stage.top };
+}
+function batGeometry(target, miss = false) {
+  const stage = surface.getBoundingClientRect();
+  const width = stage.width * .59;
+  const aspect = $('bat').naturalHeight / ($('bat').naturalWidth || 1);
+  const height = width * (aspect || .25);
+  const grip = { x: width * .16, y: height * .478 };
+  const barrel = { x: width * .90, y: height * .478 };
+  const angle = -24, radians = angle * Math.PI / 180;
+  const gap = miss ? stage.width * .065 : 0;
+  const contact = { x: target.x, y: target.y + gap };
+  const reach = barrel.x - grip.x;
+  const pivot = { x: contact.x - Math.cos(radians) * reach, y: contact.y - Math.sin(radians) * reach };
+  return { width, height, grip, barrel, angle, contact, pivot, left: pivot.x - grip.x, top: pivot.y - grip.y };
+}
+function swingBat(target, preDuration, postDuration, miss) {
+  if (!preDuration && !postDuration) return null;
+  const g = batGeometry(target, miss), bat = $('bat');
+  Object.assign(bat.style, { width: g.width + 'px', height: g.height + 'px', left: g.left + 'px', top: g.top + 'px', transformOrigin: g.grip.x + 'px ' + g.grip.y + 'px' });
+  bat.dataset.contactX = g.contact.x; bat.dataset.contactY = g.contact.y;
+  const duration = preDuration + postDuration, contactOffset = preDuration / duration;
+  return bat.animate([
+    { transform: 'rotate(-92deg)', opacity: 0, filter: 'blur(1px)' },
+    { transform: 'rotate(-57deg)', opacity: .95, offset: contactOffset * .6, filter: 'blur(.5px)' },
+    { transform: 'rotate(' + g.angle + 'deg)', opacity: 1, offset: contactOffset, filter: 'blur(0)' },
+    { transform: 'rotate(48deg)', opacity: 0, filter: 'blur(1px)' }
+  ], { duration, easing: 'linear', fill: 'forwards' });
+}
 function prepareRound() {
   if (busy || game.status === 'playing') throw Error('진행 중인 라운드를 먼저 마쳐주세요.');
   if ($('result').open) $('result').close();
@@ -146,29 +189,45 @@ async function swing(i) {
   if (game.status !== 'playing' || !Number.isInteger(i) || i < 0 || i >= 25 || game.hits.has(i)) throw Error('선택할 수 없는 코스입니다.');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const quick = $('motion-mode').value === 'quick';
-  const timing = reduce ? [0, 0, 0] : quick ? [65, 135, 85] : [160, 300, 180];
-  busy = true; render(); tiles[i].classList.add('targeted'); message('선택한 코스로 공이 들어옵니다…');
+  const timing = reduce ? { wind: 0, release: 0, flight: 0, batLead: 0, follow: 0 } : quick
+    ? { wind: 70, release: 25, flight: 150, batLead: 55, follow: 100 }
+    : { wind: 170, release: 55, flight: 320, batLead: 95, follow: 190 };
+  busy = true; render(); tiles[i].classList.add('targeted');
+  surface.dataset.phase = 'windup'; message('선택한 코스로 공이 들어옵니다…');
   const rect = tiles[i].getBoundingClientRect(), parent = surface.getBoundingClientRect();
-  const origin = { x: parent.width * .492, y: parent.height * .234 };
   const target = { x: rect.left + rect.width / 2 - parent.left, y: rect.top + rect.height / 2 - parent.top };
+  let batAnimation = null;
   try {
-    pitcherFrame(reduce ? 0 : 1); await pause(timing[0]);
-    pitcherFrame(reduce ? 0 : 2); tone('pitch');
-    await animateBall(origin, target, timing[1]); pitcherFrame(reduce ? 0 : 3);
-    const outcome = game.reveal(i); render();
+    pitcherFrame(reduce ? 0 : 1); await pause(timing.wind);
+    pitcherFrame(reduce ? 0 : 2); await pause(timing.release);
+    const origin = releasePoint();
+    $('pitch').dataset.fromX = origin.x; $('pitch').dataset.fromY = origin.y;
+    $('pitch').dataset.toX = target.x; $('pitch').dataset.toY = target.y;
+    surface.dataset.phase = 'flight'; tone('pitch');
+    const flight = animateBall(origin, target, timing.flight);
+    await pause(timing.flight * .35); pitcherFrame(reduce ? 0 : 3);
+    await pause(Math.max(0, timing.flight * .65 - timing.batLead));
+    // The selected tile is committed. Its existing outcome determines only contact vs. a whiff.
+    batAnimation = swingBat(target, timing.batLead, timing.follow, game.hazards.has(i));
+    await flight;
+    if (batAnimation) { batAnimation.pause(); batAnimation.currentTime = timing.batLead; }
+    const outcome = game.reveal(i); render(); surface.dataset.phase = 'contact';
     $('contact').style.left = target.x + 'px'; $('contact').style.top = target.y + 'px';
     if (outcome !== 'out') {
       tiles[i].classList.add('new-hit'); tone('hit'); flash('HIT!');
-      if (!reduce) $('contact').animate([{ opacity: 1, transform: 'translate(-50%,-50%) scale(.3)' }, { opacity: 0, transform: 'translate(-50%,-50%) scale(1.8)' }], { duration: timing[2], fill: 'none' });
+      if (!reduce) $('contact').animate([{ opacity: 1, transform: 'translate(-50%,-50%) scale(.35)' }, { opacity: 0, transform: 'translate(-50%,-50%) scale(1.65)' }], { duration: timing.follow, fill: 'none' });
       message('타격 성공 · 계속 공략하거나 상금을 확정하세요', 'win');
-      const destination = { x: parent.width * (.24 + i % 5 * .12), y: parent.height * .15 };
-      await animateBall(target, destination, timing[2], true);
+      if (batAnimation) batAnimation.play();
+      const destination = { x: parent.width * (.24 + i % 5 * .12), y: parent.height * .13 };
+      await animateBall(target, destination, timing.follow, true);
     } else {
-      tone('out'); flash('OUT', true); message(`OUT · 이번 라운드 −${money(game.bet)} CR`, 'error');
-      await animateBall(target, { x: parent.width * .5, y: parent.height * .745 }, timing[2], true);
+      tone('out'); flash('OUT', true); message('OUT · 이번 라운드 −' + money(game.bet) + ' CR', 'error');
+      if (batAnimation) batAnimation.play();
+      await animateBall(target, { x: parent.width * .45, y: parent.height * .755 }, timing.follow, true);
     }
-    busy = false; render();
-    if (outcome === 'cleared') { message(`${money(game.lastPayout)} CR 자동 확정`, 'win'); tone('cash'); showResult(); }
+    if (batAnimation) await batAnimation.finished.catch(() => {});
+    busy = false; render(); surface.dataset.phase = 'idle';
+    if (outcome === 'cleared') { message(money(game.lastPayout) + ' CR 자동 확정', 'win'); tone('cash'); showResult(); }
     else if (outcome === 'out') showResult();
     return game.snapshot();
   } finally { busy = false; clearEffects(); render(); }

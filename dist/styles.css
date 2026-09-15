@@ -20,3 +20,26 @@
 /* Reuse the adjacent empty field in the source photograph behind the moving sprite. */
 .mound-patch{position:absolute;inset:0;z-index:0;pointer-events:none;background-image:url('assets/stadium-background.png');background-repeat:no-repeat;background-size:100% auto;background-position:calc(50% - 10cqw) -8cqw;clip-path:inset(20% 45% 70.5% 45%)}
 .mound-patch{clip-path:inset(20% 45% 72.8% 45%)}.mound-ground-patch{position:absolute;inset:0;z-index:0;pointer-events:none;background-image:url('assets/stadium-background.png');background-repeat:no-repeat;background-size:100% auto;background-position:center -11cqw;clip-path:inset(27.2% 45% 70.5% 45%)}
+/* POC v3: a clean field, calibrated release anchor, and a transparent strike zone. */
+.stadium{background-image:url('assets/stadium-clean.png');background-size:100% auto;background-position:center -8cqw;filter:saturate(.84) brightness(.88)}
+.pitcher{left:44.5%;top:17%;width:11%;height:12%;filter:brightness(.82) saturate(.77) contrast(1.05) drop-shadow(1px 2px 1px #06141c88);background-position:0% center}
+.pitcher-shadow{position:absolute;left:45%;top:28.15%;width:10%;height:1.2%;z-index:0;pointer-events:none;background:radial-gradient(ellipse,#02100bdd 0,#03171180 35%,transparent 70%);transform:rotate(-3deg)}
+.pitcher-ghost{position:absolute;inset:0;background-image:url('assets/pitcher-sprites.png');background-size:400% 100%;background-repeat:no-repeat;opacity:0;pointer-events:none}
+.release-point{position:absolute;left:22.5%;top:33.7%;width:0;height:0;pointer-events:none}
+.shade{background:linear-gradient(#031320c9 0%,#03132072 11%,#03132005 19%,#03132000 30%,#03132012 65%,#031320e6 82%,#031320 100%)}
+.board{gap:.55cqw;padding:.7cqw;background:rgba(5,20,29,.10);border:1px solid #d2e8ee9c;outline:none;border-radius:5px;box-shadow:none;backdrop-filter:none;position:relative}
+.tile{border:1px solid #c5dce664;border-radius:2px;background:rgba(7,28,42,.19);box-shadow:none;color:#d2e4e9;transition:background .14s,border-color .14s,opacity .14s;overflow:hidden}
+.tile .diamond{width:18%;height:18%;border:1px solid #d5e7e63d}
+.tile:not(:disabled):hover{background:rgba(198,225,232,.14);border-color:#fff0b1;transform:none;box-shadow:none}
+.tile.targeted{border:1px solid #ffe2a0;background:rgba(238,199,113,.17);box-shadow:inset 0 0 0 1px #fff0bf4d}
+.tile.targeted .diamond{width:36%;height:36%;border:1px solid #fff0b1;border-radius:50%;transform:none}
+.tile.hit{background:rgba(228,180,65,.20);border:1px solid #f5d786c9;box-shadow:none;color:#ffe6a3}
+.tile.hit .ball{filter:none;font-size:4.3cqw;line-height:1.1;opacity:.94}.tile.hit b{font-size:2.35cqw;letter-spacing:.06em;text-shadow:0 1px 3px #000b}
+.tile.out{background:rgba(143,41,48,.40);border:1px solid #f3b5a5b3;color:#ffd5ca;box-shadow:none}.tile.triggered{background:rgba(168,44,53,.65);border-color:#ffcbbd}
+.tile.revealed-safe{background:rgba(9,40,32,.13);border-color:#b2d4c95c;color:#d5e9e0}
+.board.inactive .tile:not(.hit):not(.out){opacity:1}
+.game[data-phase='windup'] .tile:not(.targeted):not(.hit),.game[data-phase='flight'] .tile:not(.targeted):not(.hit){background:rgba(7,22,30,.11);opacity:.72}
+.fx-layer .pitch{font-size:4.6cqw;filter:none;text-shadow:0 0 3px #fff5}
+.swing-bat{position:absolute;left:0;top:0;opacity:0;display:block;object-fit:contain;max-width:none;pointer-events:none;z-index:5;will-change:transform,opacity;filter:drop-shadow(0 2px 2px #0006)}
+.fx-layer .pitch{z-index:6}.contact{z-index:7;width:6cqw;height:6cqw;border:1px solid #ffe5a0;box-shadow:0 0 14px #ffdc7066}
+@media(prefers-reduced-motion:reduce){.pitcher-ghost{display:none}.tile{transition:none!important}}
