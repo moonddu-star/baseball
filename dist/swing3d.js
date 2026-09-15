@@ -105,6 +105,9 @@
       const config={point,pivot,profile,name,lead,follow,miss,dy,yaw,contactRise,ratio:this.ratio,length:this.length};
       const table=(from,to)=>{const values=[];let distance=0,previous;for(let i=0;i<=180;i++){const q=from+(to-from)*i/180,pose=this.pose(config,q);if(previous)distance+=Math.hypot(pose.sweet.x-previous.x,pose.sweet.y-previous.y);values.push({q,distance});previous=pose.sweet;}return{values,distance};};
       config.approach=table(-1,0);config.finish=table(0,1);
+      // Keep the loaded pose hidden, then reveal only once the bat is visibly moving.
+      config.revealTime=lead*.62+lead*.38*.30;
+      config.revealDuration=Math.min(24,lead*.38*.12);
       // Preserve contact speed, then retain momentum until the bat has left the frame.
       const swingDuration=lead*.38;
       config.contactSpeed=3*config.approach.distance/swingDuration;
@@ -155,20 +158,20 @@
         q=this.progress(g.finish,distance);
       }
       const pose=this.pose(g,q);
-      pose.alpha=smooth(time/Math.min(85,g.lead*.2))*(1-smooth((time-g.lead-g.follow*.30)/(g.follow*.60)));
+      pose.alpha=smooth((time-g.revealTime)/g.revealDuration)*(1-smooth((time-g.lead-g.follow*.30)/(g.follow*.60)));
       return pose;
     }
     draw(g,time){
       if(!this.available||this.contextLost)return;
       const p=this.sample(g,time);
-      this.root.visible=true;this.root.position.copy(p.grip);
+      this.root.visible=p.alpha>0;this.root.position.copy(p.grip);
       // Keep the bat surface stable as the swing climbs through the hitting plane.
       const up=V(0,1,0).addScaledVector(p.direction,-p.direction.y).normalize();
       const normal=p.direction.clone().cross(up).normalize();
       this.root.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(p.direction,up,normal));
       this.root.updateMatrixWorld(true);
       const inContact=time>g.lead-45&&time<g.lead+75;
-      this.trail.visible=inContact;
+      this.trail.visible=inContact&&p.alpha>0;
       if(inContact){const points=[];for(let offset=28;offset>=0;offset-=4)points.push(this.sample(g,Math.max(0,time-offset)).sweet);this.trailGeometry.setFromPoints(points);this.trail.material.opacity=.14;}
       this.canvas.style.opacity=String(p.alpha);
       this.canvas.dataset.profile=g.name;this.canvas.dataset.phase=time<g.lead*.62?'load':time<g.lead?'swing':'follow';
