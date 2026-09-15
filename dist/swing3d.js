@@ -165,7 +165,7 @@
         q=this.progress(g.finish,distance);
       }
       const pose=this.pose(g,q);
-      pose.alpha=smooth((time-g.revealTime)/g.revealDuration)*(1-smooth((time-g.lead-g.follow*.375)/(g.follow*.625)));
+      pose.alpha=smooth((time-g.revealTime)/g.revealDuration)*(1-smooth((time-g.lead-g.follow*.75)/(g.follow*.25)));
       return pose;
     }
     draw(g,time){
@@ -177,10 +177,8 @@
       const normal=p.direction.clone().cross(up).normalize();
       this.root.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(p.direction,up,normal));
       this.root.updateMatrixWorld(true);
-      const trailDuration=Math.min(18,g.swingDuration*.12);
-      const inContact=time>g.lead-trailDuration&&time<g.lead+g.follow*.24;
-      this.trail.visible=inContact&&p.alpha>0;
-      if(inContact){const points=[];for(let offset=trailDuration;offset>=0;offset-=trailDuration/6)points.push(this.sample(g,Math.max(0,time-offset)).sweet);this.trailGeometry.setFromPoints(points);this.trail.material.opacity=.14;}
+      // Render only the current bat pose; no sampled path behind the barrel.
+      this.trail.visible=false;
       this.canvas.style.opacity=String(p.alpha);
       this.canvas.dataset.profile=g.name;this.canvas.dataset.zone=g.row+','+g.column;this.canvas.dataset.phase=time<g.swingStart?'load':time<g.lead?'swing':'follow';
       if(this.renderer)this.renderer.render(this.scene,this.camera);else this.drawSoftware();
