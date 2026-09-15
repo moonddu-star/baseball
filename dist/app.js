@@ -94,7 +94,7 @@ function flash(text, red = false) {
   void el.offsetWidth; el.classList.add('show');
 }
 function clearEffects() {
-  [$('pitch'), $('contact'), $('bat'), $('pitcher-ghost')].forEach(el => { el.getAnimations().forEach(animation => animation.cancel()); el.style.opacity = '0'; });
+  [$('pitch'), $('contact'), $('bat'), $('bat-trail-a'), $('bat-trail-b'), $('pitcher-ghost')].forEach(el => { el.getAnimations().forEach(animation => animation.cancel()); el.style.opacity = '0'; });
   $('feedback').classList.remove('show'); surface.dataset.phase = 'idle'; pitcherFrame(0, false); $('pitcher-ghost').getAnimations().forEach(a => a.cancel()); $('pitcher-ghost').style.opacity = '0';
 }
 function pitcherFrame(frame, blend = true) {
@@ -114,32 +114,88 @@ function releasePoint() {
   const stage = surface.getBoundingClientRect();
   return { x: anchor.left - stage.left, y: anchor.top - stage.top };
 }
+// The bat travels around the hitter in depth, rather than rotating in the screen plane.
 function batGeometry(target, miss = false) {
-  const stage = surface.getBoundingClientRect();
-  const width = stage.width * .59;
-  const aspect = $('bat').naturalHeight / ($('bat').naturalWidth || 1);
-  const height = width * (aspect || .25);
+  const stage = surface.getBoundingClientRect(), width = stage.width * 1.06;
+  const height = width * ($('bat').naturalHeight / ($('bat').naturalWidth || 1) || 1 / 3);
   const grip = { x: width * .16, y: height * .478 };
   const barrel = { x: width * .90, y: height * .478 };
-  const angle = -24, radians = angle * Math.PI / 180;
-  const gap = miss ? stage.width * .065 : 0;
-  const contact = { x: target.x, y: target.y + gap };
-  const reach = barrel.x - grip.x;
-  const pivot = { x: contact.x - Math.cos(radians) * reach, y: contact.y - Math.sin(radians) * reach };
-  return { width, height, grip, barrel, angle, contact, pivot, left: pivot.x - grip.x, top: pivot.y - grip.y };
+  const length = barrel.x - grip.x;
+  const pivot = { x: Math.max(-.15 * stage.width, target.x - .67 * stage.width), y: target.y + .075 * stage.width };
+  const contact = { x: target.x, y: target.y + (miss ? .065 * stage.width : 0) };
+  const dx = target.x - pivot.x, dy = target.y - pivot.y;
+  const elevation = Math.asin(-dy / length) * 180 / Math.PI;
+  const yaw = Math.acos(Math.min(1, dx / Math.sqrt(length * length - dy * dy))) * 180 / Math.PI;
+  return { width, height, grip, barrel, length, pivot, contact, target, elevation, yaw, miss, stageWidth: stage.width, stageHeight: stage.height };
+}
+function batMotion(g, lead, follow) {
+  const w = g.stageWidth, p = g.pivot, contact = lead, shoulder = g.stageHeight * .715;
+  // Load by the shoulder; hands lead; the barrel catches up, extends, then wraps high.
+  return [
+    { t: 0, x: .045*w, y: shoulder, yaw: 78, elevation: 59, alpha: 0 },
+    { t: lead*.14, x: .045*w, y: shoulder, yaw: 78, elevation: 59, alpha: 1 },
+    { t: lead*.42, x: .005*w, y: shoulder-.015*w, yaw: 103, elevation: 71, alpha: 1 },
+    { t: lead*.65, x: -.005*w, y: shoulder+(p.y-shoulder)*.20, yaw: 106, elevation: 68, alpha: 1 },
+    { t: lead*.80, x: p.x-.015*w, y: p.y+.035*w, yaw: 103, elevation: 31, alpha: 1 },
+    { t: lead*.90, x: p.x, y: p.y+.01*w, yaw: g.yaw+29, elevation: 13, alpha: 1 },
+    { t: contact, x: p.x, y: p.y, yaw: g.yaw, elevation: g.elevation, alpha: 1 },
+    { t: contact+follow*.20, x: p.x+.08*w, y: p.y-.025*w, yaw: g.yaw-43, elevation: 14, alpha: 1 },
+    { t: contact+follow*.48, x: p.x+.05*w, y: p.y-.06*w, yaw: -55, elevation: 28, alpha: 1 },
+    { t: contact+follow*.76, x: p.x-.06*w, y: p.y-.035*w, yaw: -119, elevation: 47, alpha: .9 },
+    { t: contact+follow, x: p.x-.21*w, y: p.y+.015*w, yaw: -154, elevation: 58, alpha: 0 }
+  ];
+}
+function sampleBatMotion(g, motion, time, lead) {
+  const t = Math.max(0, Math.min(motion.at(-1).t, time));
+  let i = motion.findIndex((point, index) => index < motion.length - 1 && t <= motion[index + 1].t);
+  if (i < 0) i = motion.length - 2;
+  const a = motion[i], b = motion[i+1], before = motion[Math.max(0,i-1)], after = motion[Math.min(motion.length-1,i+2)];
+  const duration = b.t-a.t, u = (t-a.t)/duration;
+  const interpolate = key => {
+    const m0 = (b[key]-before[key])/(b.t-before.t), m1 = (after[key]-a[key])/(after.t-a.t);
+    return (2*u*u*u-3*u*u+1)*a[key] + (u*u*u-2*u*u+u)*m0*duration + (-2*u*u*u+3*u*u)*b[key] + (u*u*u-u*u)*m1*duration;
+  };
+  const yaw = interpolate('yaw') * Math.PI/180, elevation = interpolate('elevation') * Math.PI/180;
+  const dx = Math.cos(yaw)*Math.cos(elevation)*g.length, dy = -Math.sin(elevation)*g.length;
+  // A whiff separates only at the plate; it never changes the committed Mines result.
+  const missBlend = Math.max(0, Math.min(1,(t/lead-.90)/.10));
+  const smoothMiss = missBlend*missBlend*(3-2*missBlend);
+  const x = interpolate('x'), y = interpolate('y') + (g.miss ? .065*g.stageWidth*smoothMiss : 0);
+  const angle = Math.atan2(dy, dx)*180/Math.PI;
+  const scale = Math.hypot(dx,dy)/g.length;
+  const thickness = .65 + .045*Math.sin(yaw);
+  return { x, y, dx, dy, angle, scale, thickness, alpha: Math.max(0,Math.min(1,interpolate('alpha'))),
+    transform: 'translate3d('+x+'px,'+y+'px,0) rotate('+angle+'deg) scale('+scale+','+thickness+') translate('+(-g.grip.x)+'px,'+(-g.grip.y)+'px)' };
 }
 function swingBat(target, preDuration, postDuration, miss) {
   if (!preDuration && !postDuration) return null;
-  const g = batGeometry(target, miss), bat = $('bat');
-  Object.assign(bat.style, { width: g.width + 'px', height: g.height + 'px', left: g.left + 'px', top: g.top + 'px', transformOrigin: g.grip.x + 'px ' + g.grip.y + 'px' });
+  const g = batGeometry(target, miss), bat = $('bat'), duration = preDuration+postDuration;
+  const motion = batMotion(g,preDuration,postDuration);
+  const samples = new Set([0,preDuration,duration,...motion.map(p=>p.t)]);
+  for (let t=8;t<duration;t+=8) samples.add(t);
+  const times = [...samples].sort((a,b)=>a-b);
+  const layers = [bat, $('bat-trail-a'), $('bat-trail-b')];
+  layers.forEach(el => Object.assign(el.style,{ width:g.width+'px',height:g.height+'px',left:'0px',top:'0px',transformOrigin:'0 0' }));
   bat.dataset.contactX = g.contact.x; bat.dataset.contactY = g.contact.y;
-  const duration = preDuration + postDuration, contactOffset = preDuration / duration;
-  return bat.animate([
-    { transform: 'rotate(-92deg)', opacity: 0, filter: 'blur(1px)' },
-    { transform: 'rotate(-57deg)', opacity: .95, offset: contactOffset * .6, filter: 'blur(.5px)' },
-    { transform: 'rotate(' + g.angle + 'deg)', opacity: 1, offset: contactOffset, filter: 'blur(0)' },
-    { transform: 'rotate(48deg)', opacity: 0, filter: 'blur(1px)' }
-  ], { duration, easing: 'linear', fill: 'forwards' });
+  bat.dataset.lead = preDuration; bat.dataset.follow = postDuration;
+  const animations = layers.map((el,index) => {
+    const lag = index*12;
+    const frames = times.map(t => {
+      const p = sampleBatMotion(g,motion,t-lag,preDuration);
+      const trailWindow = t > preDuration*.88 && t < preDuration+postDuration*.55;
+      return { offset:t/duration, transform:p.transform, opacity:index ? (trailWindow ? p.alpha*.09/index : 0) : p.alpha };
+    });
+    return el.animate(frames,{duration,easing:'linear',fill:'forwards'});
+  });
+  const main = animations[0];
+  main.companions = animations.slice(1);
+  main.contactTime = preDuration;
+  animations.forEach(animation => { animation.startTime = document.timeline.currentTime; });
+  return main;
+}
+function syncBatClock(animation, startTime) {
+  if (!animation) return;
+  [animation,...animation.companions].forEach(a => { a.startTime = startTime; });
 }
 function prepareRound() {
   if (busy || game.status === 'playing') throw Error('진행 중인 라운드를 먼저 마쳐주세요.');
@@ -173,7 +229,7 @@ function cashOut() {
   message(`${money(value)} CR 상금 확정`, 'win'); tone('cash'); showResult(); return game.snapshot();
 }
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-async function animateBall(from, to, duration, hitBack = false) {
+async function animateBall(from, to, duration, hitBack = false, batClock = null) {
   if (!duration) return;
   const transform = (p, scale, rotation) => `translate3d(${p.x}px,${p.y}px,0) translate(-50%,-50%) scale(${scale}) rotate(${rotation}deg)`;
   const mid = { x: from.x + (to.x - from.x) * .6, y: from.y + (to.y - from.y) * .45 - (hitBack ? 30 : 5) };
@@ -182,6 +238,14 @@ async function animateBall(from, to, duration, hitBack = false) {
     { transform: transform(mid, hitBack ? .65 : .65, 150), opacity: 1, offset: .6 },
     { transform: transform(to, hitBack ? .06 : 1, 330), opacity: hitBack ? 0 : 1, filter: 'blur(.3px)' }
   ], { duration, easing: hitBack ? 'ease-out' : 'cubic-bezier(.55,.05,.8,.55)', fill: 'forwards' });
+  if (batClock) {
+    if (hitBack) animation.startTime = batClock.startTime + batClock.contactTime;
+    else {
+      const startTime = document.timeline.currentTime;
+      animation.startTime = startTime;
+      syncBatClock(batClock, startTime - (batClock.contactTime - duration));
+    }
+  }
   try { await animation.finished; } finally { animation.cancel(); }
 }
 async function swing(i) {
@@ -189,41 +253,36 @@ async function swing(i) {
   if (game.status !== 'playing' || !Number.isInteger(i) || i < 0 || i >= 25 || game.hits.has(i)) throw Error('선택할 수 없는 코스입니다.');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const quick = $('motion-mode').value === 'quick';
-  const timing = reduce ? { wind: 0, release: 0, flight: 0, batLead: 0, follow: 0 } : quick
-    ? { wind: 70, release: 25, flight: 150, batLead: 55, follow: 100 }
-    : { wind: 170, release: 55, flight: 320, batLead: 95, follow: 190 };
+  const timing = reduce ? { wind: 0, release: 0, flight: 0, follow: 0 } : quick
+    ? { wind: 85, release: 25, flight: 180, follow: 180 }
+    : { wind: 190, release: 55, flight: 360, follow: 310 };
   busy = true; render(); tiles[i].classList.add('targeted');
   surface.dataset.phase = 'windup'; message('선택한 코스로 공이 들어옵니다…');
   const rect = tiles[i].getBoundingClientRect(), parent = surface.getBoundingClientRect();
   const target = { x: rect.left + rect.width / 2 - parent.left, y: rect.top + rect.height / 2 - parent.top };
   let batAnimation = null;
   try {
+    batAnimation = swingBat(target, timing.wind + timing.release + timing.flight, timing.follow, game.hazards.has(i));
     pitcherFrame(reduce ? 0 : 1); await pause(timing.wind);
     pitcherFrame(reduce ? 0 : 2); await pause(timing.release);
     const origin = releasePoint();
     $('pitch').dataset.fromX = origin.x; $('pitch').dataset.fromY = origin.y;
     $('pitch').dataset.toX = target.x; $('pitch').dataset.toY = target.y;
     surface.dataset.phase = 'flight'; tone('pitch');
-    const flight = animateBall(origin, target, timing.flight);
+    const flight = animateBall(origin, target, timing.flight, false, batAnimation);
     await pause(timing.flight * .35); pitcherFrame(reduce ? 0 : 3);
-    await pause(Math.max(0, timing.flight * .65 - timing.batLead));
-    // The selected tile is committed. Its existing outcome determines only contact vs. a whiff.
-    batAnimation = swingBat(target, timing.batLead, timing.follow, game.hazards.has(i));
     await flight;
-    if (batAnimation) { batAnimation.pause(); batAnimation.currentTime = timing.batLead; }
     const outcome = game.reveal(i); render(); surface.dataset.phase = 'contact';
     $('contact').style.left = target.x + 'px'; $('contact').style.top = target.y + 'px';
     if (outcome !== 'out') {
       tiles[i].classList.add('new-hit'); tone('hit'); flash('HIT!');
       if (!reduce) $('contact').animate([{ opacity: 1, transform: 'translate(-50%,-50%) scale(.35)' }, { opacity: 0, transform: 'translate(-50%,-50%) scale(1.65)' }], { duration: timing.follow, fill: 'none' });
       message('타격 성공 · 계속 공략하거나 상금을 확정하세요', 'win');
-      if (batAnimation) batAnimation.play();
       const destination = { x: parent.width * (.24 + i % 5 * .12), y: parent.height * .13 };
-      await animateBall(target, destination, timing.follow, true);
+      await animateBall(target, destination, timing.follow, true, batAnimation);
     } else {
       tone('out'); flash('OUT', true); message('OUT · 이번 라운드 −' + money(game.bet) + ' CR', 'error');
-      if (batAnimation) batAnimation.play();
-      await animateBall(target, { x: parent.width * .45, y: parent.height * .755 }, timing.follow, true);
+      await animateBall(target, { x: parent.width * .45, y: parent.height * .755 }, timing.follow, true, batAnimation);
     }
     if (batAnimation) await batAnimation.finished.catch(() => {});
     busy = false; render(); surface.dataset.phase = 'idle';

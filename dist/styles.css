@@ -43,3 +43,7 @@
 .swing-bat{position:absolute;left:0;top:0;opacity:0;display:block;object-fit:contain;max-width:none;pointer-events:none;z-index:5;will-change:transform,opacity;filter:drop-shadow(0 2px 2px #0006)}
 .fx-layer .pitch{z-index:6}.contact{z-index:7;width:6cqw;height:6cqw;border:1px solid #ffe5a0;box-shadow:0 0 14px #ffdc7066}
 @media(prefers-reduced-motion:reduce){.pitcher-ghost{display:none}.tile{transition:none!important}}
+
+/* v4: a continuous, foreshortened swing from load through the shoulder finish. */
+.swing-bat{transform-origin:0 0;filter:drop-shadow(0 2px 1px #0005)}
+.bat-trail{filter:blur(1.1px);z-index:4}
