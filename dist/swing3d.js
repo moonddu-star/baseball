@@ -88,13 +88,13 @@
       const vertical=clamp((row-2)/2,-1,1),horizontal=clamp((column-2)/2,-1,1);
       const name=row<2?'high':row===2?'middle':'low';
       // Blend all five rows and columns: high pitches use a raised barrel, low ones a dropped barrel.
-      const profile={finishLift:.12+.04*vertical,sweep:136+8*vertical-4*horizontal};
+      const profile={finishAngle:radians(68-4*vertical),sweep:108+6*vertical-4*horizontal};
       const point={x:target.x/this.width,y:target.y/this.width};
       // Place the end-face center on the ball; the handle may stay outside the frame.
       // Right-side pitches use a longer projected reach; left-side pitches stay more closed.
       const yaw=radians(25-8*horizontal),dy=Math.sin(radians(7-13*vertical));
       const gripForward=.038-.008*horizontal,gripRise=.013+.004*vertical;
-      const attackAngle=18+5*vertical-2*horizontal;
+      const attackAngle=34+3*vertical-2*horizontal;
       const pivot={
         x:point.x-this.length*Math.sqrt(1-dy*dy)*Math.cos(yaw),
         y:point.y+(miss?.055:0)+this.length*dy
@@ -104,8 +104,9 @@
       const forward=gripForward+this.length*radians(48)*projected*Math.sin(yaw);
       const coupling=this.length*dy*Math.cos(yaw)/projected;
       const contactRise=(attack*forward-gripRise)/(this.length+attack*coupling);
+      const elevation=Math.asin(dy),elevationRise=contactRise/Math.cos(elevation);
       const swingDuration=Math.min(lead,120),swingStart=lead-swingDuration;
-      const config={point,pivot,profile,name,row,column,lead,follow,miss,dy,yaw,contactRise,gripForward,gripRise,attackAngle,swingDuration,swingStart,ratio:this.ratio,length:this.length};
+      const config={point,pivot,profile,name,row,column,lead,follow,miss,dy,yaw,contactRise,elevation,elevationRise,gripForward,gripRise,attackAngle,swingDuration,swingStart,ratio:this.ratio,length:this.length};
       // Use world-space distance so foreshortening cannot produce an angular-speed spike.
       const table=(from,to)=>{const values=[];let distance=0,previous;for(let i=0;i<=180;i++){const q=from+(to-from)*i/180,pose=this.pose(config,q);if(previous)distance+=pose.sweet.distanceTo(previous);values.push({q,distance});previous=pose.sweet;}return{values,distance};};
       config.approach=table(-1,0);config.finish=table(0,1);
@@ -133,7 +134,10 @@
       const x=g.pivot.x+g.gripForward*q-(contact?.070*q*q:0);
       const y=g.pivot.y-g.gripRise*q-(contact?.032*q*q:0);
       // Approach below contact, then carry the end of the bat upward through the ball.
-      const cy=g.dy+g.contactRise*q+(contact?g.profile.finishLift*q*q:0);
+      // Lift the barrel through a vertical arc, rather than wrapping it sideways first.
+      // A curved lift keeps the contact tangent smooth and carries the bat up during follow-through.
+      const lift=g.elevation+g.elevationRise*q+(contact?(g.profile.finishAngle-g.elevation-g.elevationRise)*q*q:0);
+      const cy=Math.sin(lift);
       const turn=48*q+(contact?(g.profile.sweep-48)*q*q:0);
       const yaw=g.yaw-turn*Math.PI/180;
       const dx=Math.sqrt(Math.max(0,1-cy*cy))*Math.cos(yaw);
