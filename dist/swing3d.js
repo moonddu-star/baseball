@@ -1,4 +1,4 @@
-/* Original POC bat, gloves and forearm rig. Three.js is vendored under the MIT license. */
+/* POC bat and articulated arms; posed WebXR hand meshes. Third-party licenses are in vendor/. */
 (function () {
   'use strict';
   const T = window.THREE;
@@ -35,11 +35,11 @@
       const key=new T.DirectionalLight(0xffe5bc,2.5);key.position.set(2,4,5);this.scene.add(key);
       const rim=new T.DirectionalLight(0x78acdc,1.8);rim.position.set(-3,1,-2);this.scene.add(rim);
       this.materials = {
-        wood:new T.MeshStandardMaterial({color:0xc79253,roughness:.4,metalness:.02}),
+        wood:new T.MeshStandardMaterial({color:0xbfa37b,roughness:.55,metalness:.01}),
         end:new T.MeshStandardMaterial({color:0x9b6838,roughness:.65}),
         grip:new T.MeshStandardMaterial({color:0x101b2b,roughness:.85}),
         wrap:new T.MeshStandardMaterial({color:0x344352,roughness:.88}),
-        glove:new T.MeshStandardMaterial({color:0xe5e4dd,roughness:.7}),
+        glove:new T.MeshStandardMaterial({color:0xc5ccce,roughness:.9}),
         seam:new T.MeshStandardMaterial({color:0x87969f,roughness:.8}),
         pad:new T.MeshStandardMaterial({color:0x172d46,roughness:.75}),
         sleeve:new T.MeshStandardMaterial({color:0x10263f,roughness:.85}),
@@ -69,7 +69,7 @@
     mesh(geometry,material,parent=this.root){const mesh=new T.Mesh(geometry,material);parent.add(mesh);return mesh;}
     ellipsoid(parent,material,position,scale){const mesh=this.mesh(new T.SphereGeometry(1,12,8),material,parent);mesh.position.copy(position);mesh.scale.copy(scale);return mesh;}
     makeBat(){
-      const points=[[-.103,.006],[-.102,.023],[-.09,.024],[-.083,.012],[-.02,.011],[.10,.012],[.20,.014],[.36,.020],[.53,.027],[.69,.030],[.88,.030],[.93,.028],[.945,.021],[.95,.001]].map(([x,r])=>new T.Vector2(r,x));
+      const points=[[-.104,0],[-.104,.014],[-.103,.016],[-.10,.020],[-.095,.020],[-.09,.012],[-.02,.011],[.10,.012],[.25,.0135],[.43,.018],[.60,.025],[.73,.027],[.90,.027],[.938,.024],[.947,.015],[.95,.001]].map(([x,r])=>new T.Vector2(r,x));
       const wood=this.mesh(new T.LatheGeometry(points,28),this.materials.wood);wood.rotation.z=-Math.PI/2;wood.name='solid-maple-bat';this.batMesh=wood;
       const handle=this.mesh(new T.CylinderGeometry(.0128,.012,.185,20),this.materials.grip);handle.rotation.z=-Math.PI/2;handle.position.x=.008;
       for(let i=0;i<12;i++){const ring=this.mesh(new T.TorusGeometry(.0128,.0009,4,16),this.materials.wrap);ring.rotation.y=Math.PI/2;ring.position.x=-.071+i*.014;}
@@ -77,31 +77,46 @@
       const cap=this.mesh(new T.TorusGeometry(.020,.001,4,24),this.materials.gold);cap.rotation.y=Math.PI/2;cap.position.x=.9458;
     }
     makeHand(x,index){
-      const hand=new T.Group();hand.position.x=x;hand.name=index?'top-hand':'bottom-hand';this.root.add(hand);
-      const m=this.materials;
-      this.ellipsoid(hand,m.glove,V(0,-.004,.020),V(.036,.027,.018));
-      this.ellipsoid(hand,m.pad,V(0,-.007,.036),V(.018,.010,.003));
-      for(let finger=0;finger<4;finger++){
-        const f=this.mesh(new T.TorusGeometry(.0178,.0054,6,14,Math.PI*1.65),m.glove,hand);
-        f.rotation.y=Math.PI/2;f.rotation.x=.4;f.position.set(-.026+finger*.017,0,0);
-        const knuckle=this.ellipsoid(hand,m.glove,V(-.026+finger*.017,.017,.018),V(.007,.008,.008));
-        const seam=this.ellipsoid(hand,m.seam,V(-.026+finger*.017,.023,.021),V(.0055,.001,.003));
-      }
-      const thumb=this.ellipsoid(hand,m.glove,V(.018,-.012,.035),V(.012,.026,.009));thumb.rotation.z=index?-.7:.7;
-      const wrist=this.mesh(new T.CylinderGeometry(.020,.024,.042,14),m.cuff,hand);wrist.position.set(-.005,-.037,.013);wrist.rotation.z=-.3;
-      const strap=this.mesh(new T.BoxGeometry(.037,.012,.035),m.pad,hand);strap.position.set(-.009,-.04,.016);
-      const stitch=this.mesh(new T.BoxGeometry(.024,.002,.002),m.gold,hand);stitch.position.set(-.009,-.04,.035);
-      hand.userData.wrist=V(-.012,-.058,.013);
+      const side=index?'right':'left', asset=window.BattingHands[side];
+      const typed=(text,Type)=>new Type(Uint8Array.from(atob(text),c=>c.charCodeAt(0)).buffer);
+      const hand=new T.Group();hand.position.x=x;hand.name=side+'-gripping-hand';this.root.add(hand);
+      const geometry=new T.BufferGeometry();
+      geometry.setAttribute('position',new T.BufferAttribute(typed(asset.positions,Float32Array),3));
+      geometry.setAttribute('normal',new T.BufferAttribute(typed(asset.normals,Float32Array),3));
+      geometry.setIndex(new T.BufferAttribute(typed(asset.indices,Uint16Array),1));
+      const model=this.mesh(geometry,this.materials.glove,hand);model.name=side+'-anatomical-grip';
+      const cuff=this.mesh(new T.CylinderGeometry(1,1,1,16),this.materials.glove,hand);
+      cuff.name=side+'-glove-cuff';cuff.position.set(asset.wrist[0],asset.wrist[1]-.005,asset.wrist[2]);cuff.scale.set(.024,.030,.021);
+      hand.userData.wrist=V(asset.wrist[0],asset.wrist[1]-.015,asset.wrist[2]);hand.userData.side=side;
       return hand;
     }
     makeArm(hand,index){
-      const group=new T.Group();group.name='forearm-'+index;this.scene.add(group);
-      const forearm=this.mesh(new T.CylinderGeometry(.024,.034,1,14),this.materials.sleeve,group);
-      return {group,forearm,hand,index};
+      const group=new T.Group();group.name='articulated-arm-'+index;this.scene.add(group);
+      const upper=this.mesh(new T.CylinderGeometry(.030,.038,1,16),this.materials.sleeve,group);
+      const forearm=this.mesh(new T.CylinderGeometry(.023,.030,1,16),this.materials.sleeve,group);
+      const elbowJoint=this.mesh(new T.SphereGeometry(.030,12,8),this.materials.sleeve,group);
+      return {group,upper,forearm,elbowJoint,hand,index,upperLength:.245,foreLength:.23};
+    }
+    orientSegment(mesh,from,to){
+      const axis=to.clone().sub(from);mesh.position.copy(from).add(to).multiplyScalar(.5);
+      mesh.scale.set(1,axis.length(),1);mesh.quaternion.setFromUnitVectors(V(0,1,0),axis.normalize());
+    }
+    poseArms(g,p){
+      this.arms.forEach(arm=>{
+        const wrist=arm.hand.localToWorld(arm.hand.userData.wrist.clone());
+        const shoulder=V(-.215,g.ratio-g.hand.y-.04-arm.index*.028,.13-arm.index*.09);
+        const line=wrist.clone().sub(shoulder),distance=clamp(line.length(),.001,arm.upperLength+arm.foreLength-.001),axis=line.normalize();
+        const along=(arm.upperLength*arm.upperLength-arm.foreLength*arm.foreLength+distance*distance)/(2*distance);
+        const height=Math.sqrt(Math.max(0,arm.upperLength*arm.upperLength-along*along));
+        const bend=V(0,-1,arm.index?.35:.65);bend.addScaledVector(axis,-bend.dot(axis)).normalize();
+        const elbow=shoulder.clone().addScaledVector(axis,along).addScaledVector(bend,height);
+        arm.group.visible=true;this.orientSegment(arm.upper,shoulder,elbow);this.orientSegment(arm.forearm,elbow,wrist);
+        arm.elbowJoint.position.copy(elbow);arm.lastJoints={shoulder,elbow,wrist};
+      });
     }
     mergeRigMeshes(){
       this.root.updateMatrixWorld(true);const groups=new Map(),original=[];
-      this.root.traverse(mesh=>{if(!mesh.isMesh)return;original.push(mesh);const geometry=mesh.geometry.index?mesh.geometry.toNonIndexed():mesh.geometry.clone();geometry.applyMatrix4(mesh.matrixWorld);if(!groups.has(mesh.material))groups.set(mesh.material,[]);groups.get(mesh.material).push(geometry);});
+      this.root.traverse(mesh=>{if(!mesh.isMesh||mesh.parent!==this.root)return;original.push(mesh);const geometry=mesh.geometry.index?mesh.geometry.toNonIndexed():mesh.geometry.clone();geometry.applyMatrix4(mesh.matrixWorld);if(!groups.has(mesh.material))groups.set(mesh.material,[]);groups.get(mesh.material).push(geometry);});
       original.forEach(mesh=>{mesh.removeFromParent();mesh.geometry.dispose();});
       for(const [material,parts] of groups){
         const geometry=new T.BufferGeometry();
@@ -133,7 +148,7 @@
     }
     pose(g,q){
       const contact=q>=0;
-      const x=g.hand.x+.038*q-(contact?.13*q*q:0);
+      const x=g.hand.x+.038*q-(contact?.070*q*q:0);
       const y=g.hand.y+.022*q*q-.013*q;
       let cy=g.dy+(q<0?g.profile.loadLift*q*q:g.profile.finishLift*Math.pow(Math.sin(Math.PI*q),2));
       const guard=.294*g.ratio+.025;
@@ -166,16 +181,15 @@
       if(!this.available||this.contextLost)return;
       const p=this.sample(g,time);
       this.root.visible=true;this.root.position.copy(p.grip);
-      this.root.quaternion.setFromUnitVectors(V(1,0,0),p.direction);
-      this.root.updateMatrixWorld(true);
-      this.arms.forEach(arm=>{
-        const wrist=arm.hand.localToWorld(arm.hand.userData.wrist.clone());
-        const elbow=V(-.13,g.ratio-g.hand.y-.085-arm.index*.025,.13-arm.index*.08);
-        const axis=wrist.clone().sub(elbow);arm.group.visible=true;
-        arm.forearm.position.copy(elbow).add(wrist).multiplyScalar(.5);
-        arm.forearm.scale.set(1,axis.length(),1);
-        arm.forearm.quaternion.setFromUnitVectors(V(0,1,0),axis.normalize());
-      });
+      // Keep the wrists in a stable swing plane instead of using a shortest-arc roll.
+      const up=V(0,1,0).addScaledVector(p.direction,-p.direction.y).normalize();
+      const normal=p.direction.clone().cross(up).normalize();
+      this.root.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(p.direction,up,normal));
+      const release=smooth(p.q/.85),load=smooth(-p.q);
+      // Bottom palm turns down and top palm turns up into contact; forearms roll after it.
+      this.hands[0].rotation.x=-1.18+.7*load-.5*release;
+      this.hands[1].rotation.x=-.95+.6*load-.8*release;
+      this.root.updateMatrixWorld(true);this.poseArms(g,p);
       const inContact=time>g.lead-45&&time<g.lead+75;
       this.trail.visible=inContact;
       if(inContact){const points=[];for(let offset=28;offset>=0;offset-=4)points.push(this.sample(g,Math.max(0,time-offset)).sweet);this.trailGeometry.setFromPoints(points);this.trail.material.opacity=.14;}
