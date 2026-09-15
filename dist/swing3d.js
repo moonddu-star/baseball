@@ -141,8 +141,9 @@
       const yaw=g.yaw+(q<0?-q*68:-q*g.profile.sweep)*Math.PI/180;
       let dx=Math.sqrt(Math.max(0,1-cy*cy))*Math.cos(yaw);
       if(g.miss){const blend=q<0?smooth((q+.16)/.16):1;cy-=.055/this.length*blend;dx=clamp(dx,-Math.sqrt(1-cy*cy),Math.sqrt(1-cy*cy));}
-      const zSign=-Math.sign(Math.sin(yaw)||1),dz=zSign*Math.sqrt(Math.max(0,1-dx*dx-cy*cy));
-      const grip=V(x,g.ratio-y,.05+.03*q);
+      // Camera is on +Z; the barrel must pass through contact toward the field (-Z).
+      const zSign=Math.sign(Math.sin(yaw)||1),dz=zSign*Math.sqrt(Math.max(0,1-dx*dx-cy*cy));
+      const grip=V(x,g.ratio-y,.05-.03*q);
       const direction=V(dx,cy,dz).normalize();
       const sweet=grip.clone().addScaledVector(direction,this.length);
       return {grip,direction,sweet,q};
