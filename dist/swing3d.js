@@ -1,4 +1,4 @@
-/* POC bat and articulated arms; posed WebXR hand meshes. Third-party licenses are in vendor/. */
+/* Bat-only 3D swing with an ascending contact path. Three.js license is in vendor/. */
 (function () {
   'use strict';
   const T = window.THREE;
@@ -6,9 +6,9 @@
   const smooth = t => { t = clamp(t, 0, 1); return t*t*(3-2*t); };
   const V = (x=0,y=0,z=0) => new T.Vector3(x,y,z);
   const PROFILES = {
-    high: { drop: .045, loadLift: .15, finishLift: .055, sweep: 137 },
-    middle: { drop: .075, loadLift: .38, finishLift: .12, sweep: 150 },
-    low: { drop: .055, loadLift: .57, finishLift: .19, sweep: 160 }
+    high: { drop: .045, loadLift: .15, finishLift: .14, sweep: 137 },
+    middle: { drop: .075, loadLift: .38, finishLift: .24, sweep: 150 },
+    low: { drop: .055, loadLift: .57, finishLift: .34, sweep: 160 }
   };
   class BaseballSwing {
     constructor(canvas, surface) {
@@ -39,11 +39,6 @@
         end:new T.MeshStandardMaterial({color:0x9b6838,roughness:.65}),
         grip:new T.MeshStandardMaterial({color:0x101b2b,roughness:.85}),
         wrap:new T.MeshStandardMaterial({color:0x344352,roughness:.88}),
-        glove:new T.MeshStandardMaterial({color:0xc5ccce,roughness:.9}),
-        seam:new T.MeshStandardMaterial({color:0x87969f,roughness:.8}),
-        pad:new T.MeshStandardMaterial({color:0x172d46,roughness:.75}),
-        sleeve:new T.MeshStandardMaterial({color:0x10263f,roughness:.85}),
-        cuff:new T.MeshStandardMaterial({color:0xd6d5cc,roughness:.75}),
         gold:new T.MeshStandardMaterial({color:0xb58a45,roughness:.55})
       };
       // Wood grain follows the solid surface and never scales independently of the bat.
@@ -51,14 +46,13 @@
         shader.vertexShader = 'varying vec3 vWood;\n' + shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvWood = position;');
         shader.fragmentShader = 'varying vec3 vWood;\n' + shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\nfloat grain = sin(vWood.y*650.0 + sin(vWood.x*22.0)*2.0 + vWood.z*340.0);\ndiffuseColor.rgb *= 0.97 + 0.035*grain;');
       };
-      this.root = new T.Group();this.root.name='two-hand-batting-rig';this.scene.add(this.root);
-      this.makeBat(); this.hands = [this.makeHand(-.034,0),this.makeHand(.041,1)];
-      this.arms = this.hands.map((hand,index)=>this.makeArm(hand,index));
+      this.root = new T.Group();this.root.name='bat-only-swing-rig';this.scene.add(this.root);
+      this.makeBat();
       this.mergeRigMeshes();
       this.trailGeometry = new T.BufferGeometry().setFromPoints([V(),V()]);
       this.trail = new T.Line(this.trailGeometry,new T.LineBasicMaterial({color:0xf8dc9b,transparent:true,opacity:.16,depthWrite:false}));
       this.trail.visible=false;this.scene.add(this.trail);
-      this.root.visible=false;this.arms.forEach(arm=>arm.group.visible=false);
+      this.root.visible=false;
       this.resize();
       if(this.renderer){this.renderer.compile(this.scene,this.camera);this.renderer.render(this.scene,this.camera);}
       this.observer=new ResizeObserver(()=>{this.resize();if(this.active)this.draw(this.active.config,this.active.currentTime);});
@@ -67,7 +61,6 @@
       this.canvas.addEventListener('webglcontextrestored',()=>{this.contextLost=false;this.resize();});
     }
     mesh(geometry,material,parent=this.root){const mesh=new T.Mesh(geometry,material);parent.add(mesh);return mesh;}
-    ellipsoid(parent,material,position,scale){const mesh=this.mesh(new T.SphereGeometry(1,12,8),material,parent);mesh.position.copy(position);mesh.scale.copy(scale);return mesh;}
     makeBat(){
       const points=[[-.104,0],[-.104,.014],[-.103,.016],[-.10,.020],[-.095,.020],[-.09,.012],[-.02,.011],[.10,.012],[.25,.0135],[.43,.018],[.60,.025],[.73,.027],[.90,.027],[.938,.024],[.947,.015],[.95,.001]].map(([x,r])=>new T.Vector2(r,x));
       const wood=this.mesh(new T.LatheGeometry(points,28),this.materials.wood);wood.rotation.z=-Math.PI/2;wood.name='solid-maple-bat';this.batMesh=wood;
@@ -75,44 +68,6 @@
       for(let i=0;i<12;i++){const ring=this.mesh(new T.TorusGeometry(.0128,.0009,4,16),this.materials.wrap);ring.rotation.y=Math.PI/2;ring.position.x=-.071+i*.014;}
       const end=this.mesh(new T.CircleGeometry(.019,24),this.materials.end);end.rotation.y=Math.PI/2;end.position.x=.9455;
       const cap=this.mesh(new T.TorusGeometry(.020,.001,4,24),this.materials.gold);cap.rotation.y=Math.PI/2;cap.position.x=.9458;
-    }
-    makeHand(x,index){
-      const side=index?'right':'left', asset=window.BattingHands[side];
-      const typed=(text,Type)=>new Type(Uint8Array.from(atob(text),c=>c.charCodeAt(0)).buffer);
-      const hand=new T.Group();hand.position.x=x;hand.name=side+'-gripping-hand';this.root.add(hand);
-      const geometry=new T.BufferGeometry();
-      geometry.setAttribute('position',new T.BufferAttribute(typed(asset.positions,Float32Array),3));
-      geometry.setAttribute('normal',new T.BufferAttribute(typed(asset.normals,Float32Array),3));
-      geometry.setIndex(new T.BufferAttribute(typed(asset.indices,Uint16Array),1));
-      const model=this.mesh(geometry,this.materials.glove,hand);model.name=side+'-anatomical-grip';
-      const cuff=this.mesh(new T.CylinderGeometry(1,1,1,16),this.materials.glove,hand);
-      cuff.name=side+'-glove-cuff';cuff.position.set(asset.wrist[0],asset.wrist[1]-.005,asset.wrist[2]);cuff.scale.set(.024,.030,.021);
-      hand.userData.wrist=V(asset.wrist[0],asset.wrist[1]-.015,asset.wrist[2]);hand.userData.side=side;
-      return hand;
-    }
-    makeArm(hand,index){
-      const group=new T.Group();group.name='articulated-arm-'+index;this.scene.add(group);
-      const upper=this.mesh(new T.CylinderGeometry(.030,.038,1,16),this.materials.sleeve,group);
-      const forearm=this.mesh(new T.CylinderGeometry(.023,.030,1,16),this.materials.sleeve,group);
-      const elbowJoint=this.mesh(new T.SphereGeometry(.030,12,8),this.materials.sleeve,group);
-      return {group,upper,forearm,elbowJoint,hand,index,upperLength:.245,foreLength:.23};
-    }
-    orientSegment(mesh,from,to){
-      const axis=to.clone().sub(from);mesh.position.copy(from).add(to).multiplyScalar(.5);
-      mesh.scale.set(1,axis.length(),1);mesh.quaternion.setFromUnitVectors(V(0,1,0),axis.normalize());
-    }
-    poseArms(g,p){
-      this.arms.forEach(arm=>{
-        const wrist=arm.hand.localToWorld(arm.hand.userData.wrist.clone());
-        const shoulder=V(-.215,g.ratio-g.hand.y-.04-arm.index*.028,.13-arm.index*.09);
-        const line=wrist.clone().sub(shoulder),distance=clamp(line.length(),.001,arm.upperLength+arm.foreLength-.001),axis=line.normalize();
-        const along=(arm.upperLength*arm.upperLength-arm.foreLength*arm.foreLength+distance*distance)/(2*distance);
-        const height=Math.sqrt(Math.max(0,arm.upperLength*arm.upperLength-along*along));
-        const bend=V(0,-1,arm.index?.35:.65);bend.addScaledVector(axis,-bend.dot(axis)).normalize();
-        const elbow=shoulder.clone().addScaledVector(axis,along).addScaledVector(bend,height);
-        arm.group.visible=true;this.orientSegment(arm.upper,shoulder,elbow);this.orientSegment(arm.forearm,elbow,wrist);
-        arm.elbowJoint.position.copy(elbow);arm.lastJoints={shoulder,elbow,wrist};
-      });
     }
     mergeRigMeshes(){
       this.root.updateMatrixWorld(true);const groups=new Map(),original=[];
@@ -134,10 +89,15 @@
     configure(target,lead,follow,miss,row){
       const name=row<2?'high':row===2?'middle':'low', profile=PROFILES[name];
       const point={x:target.x/this.width,y:target.y/this.width};
-      const hand={x:.09,y:Math.min(point.y+profile.drop,this.ratio*.716)};
-      const dx=(point.x-hand.x)/this.length,dy=(hand.y-point.y)/this.length;
+      const pivot={x:.09,y:Math.min(point.y+profile.drop,this.ratio*.716)};
+      const dx=(point.x-pivot.x)/this.length,dy=(pivot.y-point.y-(miss?.055:0))/this.length;
       const yaw=Math.acos(clamp(dx/Math.sqrt(1-dy*dy),-1,1));
-      const config={point,hand,profile,name,lead,follow,miss,dy,yaw,ratio:this.ratio,length:this.length};
+      // An 18-degree screen-space rise at impact; the yaw derivative matches across contact.
+      const horizontal=Math.sqrt(1-dy*dy),attack=Math.tan(18*Math.PI/180);
+      const forward=.038+this.length*(68*Math.PI/180)*horizontal*Math.sin(yaw);
+      const coupling=this.length*dy*Math.cos(yaw)/horizontal;
+      const contactRise=(attack*forward-.013)/(this.length+attack*coupling);
+      const config={point,pivot,profile,name,lead,follow,miss,dy,yaw,contactRise,ratio:this.ratio,length:this.length};
       const table=(from,to)=>{const values=[];let distance=0,previous;for(let i=0;i<=180;i++){const q=from+(to-from)*i/180,pose=this.pose(config,q);if(previous)distance+=Math.hypot(pose.sweet.x-previous.x,pose.sweet.y-previous.y);values.push({q,distance});previous=pose.sweet;}return{values,distance};};
       config.approach=table(-1,0);config.finish=table(0,1);
       // Match the speed through contact; the follow-through then loses speed progressively.
@@ -148,14 +108,15 @@
     }
     pose(g,q){
       const contact=q>=0;
-      const x=g.hand.x+.038*q-(contact?.070*q*q:0);
-      const y=g.hand.y+.022*q*q-.013*q;
-      let cy=g.dy+(q<0?g.profile.loadLift*q*q:g.profile.finishLift*Math.pow(Math.sin(Math.PI*q),2));
+      const x=g.pivot.x+.038*q-(contact?.070*q*q:0);
+      const y=g.pivot.y-.013*q+(contact?-.045:.022)*q*q;
+      // Load above the ball, dip into the hitting plane, then rise through it and finish high.
+      let cy=g.dy+g.contactRise*q+(contact?g.profile.finishLift:g.profile.loadLift+g.contactRise)*q*q;
       const guard=.294*g.ratio+.025;
       cy=Math.min(cy,(y-guard)/.95);
-      const yaw=g.yaw+(q<0?-q*68:-q*g.profile.sweep)*Math.PI/180;
+      const turn=68*q+(contact?(g.profile.sweep-68)*q*q:0);
+      const yaw=g.yaw-turn*Math.PI/180;
       let dx=Math.sqrt(Math.max(0,1-cy*cy))*Math.cos(yaw);
-      if(g.miss){const blend=q<0?smooth((q+.16)/.16):1;cy-=.055/this.length*blend;dx=clamp(dx,-Math.sqrt(1-cy*cy),Math.sqrt(1-cy*cy));}
       // Camera is on +Z; the barrel must pass through contact toward the field (-Z).
       const zSign=Math.sign(Math.sin(yaw)||1),dz=zSign*Math.sqrt(Math.max(0,1-dx*dx-cy*cy));
       const grip=V(x,g.ratio-y,.05-.03*q);
@@ -181,15 +142,11 @@
       if(!this.available||this.contextLost)return;
       const p=this.sample(g,time);
       this.root.visible=true;this.root.position.copy(p.grip);
-      // Keep the wrists in a stable swing plane instead of using a shortest-arc roll.
+      // Keep the bat surface stable as the swing climbs through the hitting plane.
       const up=V(0,1,0).addScaledVector(p.direction,-p.direction.y).normalize();
       const normal=p.direction.clone().cross(up).normalize();
       this.root.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(p.direction,up,normal));
-      const release=smooth(p.q/.85),load=smooth(-p.q);
-      // Bottom palm turns down and top palm turns up into contact; forearms roll after it.
-      this.hands[0].rotation.x=-1.18+.7*load-.5*release;
-      this.hands[1].rotation.x=-.95+.6*load-.8*release;
-      this.root.updateMatrixWorld(true);this.poseArms(g,p);
+      this.root.updateMatrixWorld(true);
       const inContact=time>g.lead-45&&time<g.lead+75;
       this.trail.visible=inContact;
       if(inContact){const points=[];for(let offset=28;offset>=0;offset-=4)points.push(this.sample(g,Math.max(0,time-offset)).sweet);this.trailGeometry.setFromPoints(points);this.trail.material.opacity=.14;}
