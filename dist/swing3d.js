@@ -3,7 +3,6 @@
   'use strict';
   const T = window.THREE;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const smooth = t => { t = clamp(t, 0, 1); return t*t*(3-2*t); };
   const V = (x=0,y=0,z=0) => new T.Vector3(x,y,z);
   const radians = degrees => degrees*Math.PI/180;
   class BaseballSwing {
@@ -16,7 +15,7 @@
       this.camera = new T.OrthographicCamera(0,1,16/9,0,.1,30);
       this.camera.position.set(0,0,8); this.camera.lookAt(0,0,0);
       try {
-        this.renderer = new T.WebGLRenderer({canvas,alpha:true,antialias:true,powerPreference:'low-power',preserveDrawingBuffer:true});
+        this.renderer = new T.WebGLRenderer({canvas,alpha:true,antialias:true,powerPreference:'low-power',preserveDrawingBuffer:false});
         this.renderer.setClearColor(0x000000,0);
         this.renderer.outputColorSpace = T.SRGBColorSpace;
         this.renderer.toneMapping = T.ACESFilmicToneMapping;
@@ -47,9 +46,6 @@
       this.makeBat();
       this.mergeRigMeshes();
       this.root.scale.setScalar(this.modelScale);
-      this.trailGeometry = new T.BufferGeometry().setFromPoints([V(),V()]);
-      this.trail = new T.Line(this.trailGeometry,new T.LineBasicMaterial({color:0xf8dc9b,transparent:true,opacity:.16,depthWrite:false}));
-      this.trail.visible=false;this.scene.add(this.trail);
       this.root.visible=false;
       this.resize();
       if(this.renderer){this.renderer.compile(this.scene,this.camera);this.renderer.render(this.scene,this.camera);}
@@ -112,7 +108,6 @@
       config.approach=table(-1,0);config.finish=table(0,1);
       // Keep the loaded pose hidden, then reveal only once the bat is visibly moving.
       config.revealTime=lead-Math.min(lead,80);
-      config.revealDuration=12;
       // Preserve contact speed, then retain momentum until the bat has left the frame.
       config.contactSpeed=3*config.approach.distance/swingDuration;
       config.entryRate=config.contactSpeed*follow/config.finish.distance;
@@ -165,7 +160,8 @@
         q=this.progress(g.finish,distance);
       }
       const pose=this.pose(g,q);
-      pose.alpha=smooth((time-g.revealTime)/g.revealDuration)*(1-smooth((time-g.lead-g.follow*.75)/(g.follow*.25)));
+      // Only fully opaque or fully hidden: no fading, ghost poses, or motion trails.
+      pose.alpha=time>=g.revealTime&&time<g.lead+g.follow?1:0;
       return pose;
     }
     draw(g,time){
@@ -177,8 +173,6 @@
       const normal=p.direction.clone().cross(up).normalize();
       this.root.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(p.direction,up,normal));
       this.root.updateMatrixWorld(true);
-      // Render only the current bat pose; no sampled path behind the barrel.
-      this.trail.visible=false;
       this.canvas.style.opacity=String(p.alpha);
       this.canvas.dataset.profile=g.name;this.canvas.dataset.zone=g.row+','+g.column;this.canvas.dataset.phase=time<g.swingStart?'load':time<g.lead?'swing':'follow';
       if(this.renderer)this.renderer.render(this.scene,this.camera);else this.drawSoftware();
