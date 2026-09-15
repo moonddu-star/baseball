@@ -6,14 +6,15 @@
   const smooth = t => { t = clamp(t, 0, 1); return t*t*(3-2*t); };
   const V = (x=0,y=0,z=0) => new T.Vector3(x,y,z);
   const PROFILES = {
-    high: { drop: .045, loadLift: .15, finishLift: .14, sweep: 137 },
-    middle: { drop: .075, loadLift: .38, finishLift: .24, sweep: 150 },
-    low: { drop: .055, loadLift: .57, finishLift: .34, sweep: 160 }
+    high: { loadLift: .02, finishLift: .14, sweep: 58 },
+    middle: { loadLift: .03, finishLift: .24, sweep: 64 },
+    low: { loadLift: .04, finishLift: .34, sweep: 70 }
   };
   class BaseballSwing {
     constructor(canvas, surface) {
       this.canvas = canvas; this.surface = surface; this.active = null;
-      this.length = .82; this.available = false;
+      this.tipX = .9455; this.modelScale = 1.12;
+      this.length = this.tipX*this.modelScale; this.available = false;
       if (!T) return;
       this.scene = new T.Scene();
       this.camera = new T.OrthographicCamera(0,1,16/9,0,.1,30);
@@ -49,6 +50,7 @@
       this.root = new T.Group();this.root.name='bat-only-swing-rig';this.scene.add(this.root);
       this.makeBat();
       this.mergeRigMeshes();
+      this.root.scale.setScalar(this.modelScale);
       this.trailGeometry = new T.BufferGeometry().setFromPoints([V(),V()]);
       this.trail = new T.Line(this.trailGeometry,new T.LineBasicMaterial({color:0xf8dc9b,transparent:true,opacity:.16,depthWrite:false}));
       this.trail.visible=false;this.scene.add(this.trail);
@@ -89,12 +91,15 @@
     configure(target,lead,follow,miss,row){
       const name=row<2?'high':row===2?'middle':'low', profile=PROFILES[name];
       const point={x:target.x/this.width,y:target.y/this.width};
-      const pivot={x:.09,y:Math.min(point.y+profile.drop,this.ratio*.716)};
-      const dx=(point.x-pivot.x)/this.length,dy=(pivot.y-point.y-(miss?.055:0))/this.length;
-      const yaw=Math.acos(clamp(dx/Math.sqrt(1-dy*dy),-1,1));
+      // Place the end-face center on the ball; the handle may stay outside the frame.
+      const yaw=25*Math.PI/180,dy=Math.sin(12*Math.PI/180);
+      const pivot={
+        x:point.x-this.length*Math.sqrt(1-dy*dy)*Math.cos(yaw),
+        y:point.y+(miss?.055:0)+this.length*dy
+      };
       // An 18-degree screen-space rise at impact; the yaw derivative matches across contact.
       const horizontal=Math.sqrt(1-dy*dy),attack=Math.tan(18*Math.PI/180);
-      const forward=.038+this.length*(68*Math.PI/180)*horizontal*Math.sin(yaw);
+      const forward=.038+this.length*(48*Math.PI/180)*horizontal*Math.sin(yaw);
       const coupling=this.length*dy*Math.cos(yaw)/horizontal;
       const contactRise=(attack*forward-.013)/(this.length+attack*coupling);
       const config={point,pivot,profile,name,lead,follow,miss,dy,yaw,contactRise,ratio:this.ratio,length:this.length};
@@ -110,13 +115,11 @@
       const contact=q>=0;
       const x=g.pivot.x+.038*q-(contact?.070*q*q:0);
       const y=g.pivot.y-.013*q+(contact?-.045:.022)*q*q;
-      // Load above the ball, dip into the hitting plane, then rise through it and finish high.
-      let cy=g.dy+g.contactRise*q+(contact?g.profile.finishLift:g.profile.loadLift+g.contactRise)*q*q;
-      const guard=.294*g.ratio+.025;
-      cy=Math.min(cy,(y-guard)/.95);
-      const turn=68*q+(contact?(g.profile.sweep-68)*q*q:0);
+      // Approach below contact, then carry the end of the bat upward through the ball.
+      const cy=g.dy+g.contactRise*q+(contact?g.profile.finishLift:g.profile.loadLift+g.contactRise)*q*q;
+      const turn=48*q+(contact?(g.profile.sweep-48)*q*q:0);
       const yaw=g.yaw-turn*Math.PI/180;
-      let dx=Math.sqrt(Math.max(0,1-cy*cy))*Math.cos(yaw);
+      const dx=Math.sqrt(Math.max(0,1-cy*cy))*Math.cos(yaw);
       // Camera is on +Z; the barrel must pass through contact toward the field (-Z).
       const zSign=Math.sign(Math.sin(yaw)||1),dz=zSign*Math.sqrt(Math.max(0,1-dx*dx-cy*cy));
       const grip=V(x,g.ratio-y,.05-.03*q);
