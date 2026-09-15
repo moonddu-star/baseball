@@ -1,0 +1,26 @@
+{
+  "files": {
+    "poc/index.html": "index.html",
+    "poc/styles/game.css": "styles.css",
+    "poc/src/domain/mines-engine.js": "engine.js",
+    "poc/src/game/fx/baseball-swing.js": "swing3d.js",
+    "poc/vendor/three.js": "vendor/three.js",
+    "poc/vendor/three-license.txt": "vendor/THREE-LICENSE.txt",
+    "poc/vendor/hand-models-license.txt": "vendor/HAND-MODELS-LICENSE.txt",
+    "poc/assets/images/bat.png": "assets/bat.png",
+    "poc/assets/images/stadium-clean.png": "assets/stadium-clean.png",
+    "poc/assets/images/stadium-background.png": "assets/stadium-background.png",
+    "poc/assets/images/pitcher-sprites.png": "assets/pitcher-sprites.png",
+    "poc/assets/legacy/batting-hands.js": "assets/batting-hands.js"
+  },
+  "scripts": [
+    "poc/src/game/shared/format.js",
+    "poc/src/game/audio/game-audio.js",
+    "poc/src/game/ui/game-view.js",
+    "poc/src/game/ui/result-panel.js",
+    "poc/src/game/ui/bind-controls.js",
+    "poc/src/game/fx/pitch-effects.js",
+    "poc/src/integration/model-context.js",
+    "poc/src/game/game-main.js"
+  ]
+}

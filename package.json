@@ -1,0 +1,13 @@
+{
+  "name": "strike-zone-poc",
+  "version": "0.12.2",
+  "private": true,
+  "description": "Baseball Mines POC and PixiBrown migration reference",
+  "scripts": {
+    "build": "node tools/build-poc.cjs",
+    "start": "node server.cjs",
+    "dev": "node server.cjs",
+    "check": "node tools/check-project.cjs",
+    "test": "node --test tests/*.test.cjs"
+  }
+}

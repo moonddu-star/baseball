@@ -1,0 +1,211 @@
+/* Bat-only 3D swing with an ascending contact path. Three.js license is in vendor/. */
+(function () {
+  'use strict';
+  const T = window.THREE;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const V = (x=0,y=0,z=0) => new T.Vector3(x,y,z);
+  const radians = degrees => degrees*Math.PI/180;
+  class BaseballSwing {
+    constructor(canvas, surface) {
+      this.canvas = canvas; this.surface = surface; this.active = null;
+      this.tipX = .9455; this.modelScale = 1.12;
+      this.length = this.tipX*this.modelScale; this.available = false;
+      if (!T) return;
+      this.scene = new T.Scene();
+      this.camera = new T.OrthographicCamera(0,1,16/9,0,.1,30);
+      this.camera.position.set(0,0,8); this.camera.lookAt(0,0,0);
+      try {
+        this.renderer = new T.WebGLRenderer({canvas,alpha:true,antialias:true,powerPreference:'low-power',preserveDrawingBuffer:false});
+        this.renderer.setClearColor(0x000000,0);
+        this.renderer.outputColorSpace = T.SRGBColorSpace;
+        this.renderer.toneMapping = T.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = .95;
+        this.available = true; this.mode = 'webgl';
+      } catch (_) {
+        // The same 3D meshes can also be projected by the small software renderer.
+        const replacement = canvas.cloneNode(false); canvas.replaceWith(replacement);
+        this.canvas = replacement; this.context = replacement.getContext('2d');
+        this.available = !!this.context; this.mode = 'software';
+      }
+      this.scene.add(new T.HemisphereLight(0xd5e8ff,0x30241a,2.1));
+      const key=new T.DirectionalLight(0xffe5bc,2.5);key.position.set(2,4,5);this.scene.add(key);
+      const rim=new T.DirectionalLight(0x78acdc,1.8);rim.position.set(-3,1,-2);this.scene.add(rim);
+      this.materials = {
+        wood:new T.MeshStandardMaterial({color:0xbfa37b,roughness:.55,metalness:.01}),
+        end:new T.MeshStandardMaterial({color:0x9b6838,roughness:.65}),
+        grip:new T.MeshStandardMaterial({color:0x101b2b,roughness:.85}),
+        wrap:new T.MeshStandardMaterial({color:0x344352,roughness:.88}),
+        gold:new T.MeshStandardMaterial({color:0xb58a45,roughness:.55})
+      };
+      // Wood grain follows the solid surface and never scales independently of the bat.
+      this.materials.wood.onBeforeCompile = shader => {
+        shader.vertexShader = 'varying vec3 vWood;\n' + shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvWood = position;');
+        shader.fragmentShader = 'varying vec3 vWood;\n' + shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\nfloat grain = sin(vWood.y*650.0 + sin(vWood.x*22.0)*2.0 + vWood.z*340.0);\ndiffuseColor.rgb *= 0.97 + 0.035*grain;');
+      };
+      this.root = new T.Group();this.root.name='bat-only-swing-rig';this.scene.add(this.root);
+      this.makeBat();
+      this.mergeRigMeshes();
+      this.root.scale.setScalar(this.modelScale);
+      this.root.visible=false;
+      this.resize();
+      if(this.renderer){this.renderer.compile(this.scene,this.camera);this.renderer.render(this.scene,this.camera);}
+      this.observer=new ResizeObserver(()=>{this.resize();if(this.active)this.draw(this.active.config,this.active.currentTime);});
+      this.observer.observe(surface);
+      this.canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();this.contextLost=true;this.cancel();});
+      this.canvas.addEventListener('webglcontextrestored',()=>{this.contextLost=false;this.resize();});
+    }
+    mesh(geometry,material,parent=this.root){const mesh=new T.Mesh(geometry,material);parent.add(mesh);return mesh;}
+    makeBat(){
+      const points=[[-.104,0],[-.104,.014],[-.103,.016],[-.10,.020],[-.095,.020],[-.09,.012],[-.02,.011],[.10,.012],[.25,.0135],[.43,.018],[.60,.025],[.73,.027],[.90,.027],[.938,.024],[.947,.015],[.95,.001]].map(([x,r])=>new T.Vector2(r,x));
+      const wood=this.mesh(new T.LatheGeometry(points,28),this.materials.wood);wood.rotation.z=-Math.PI/2;wood.name='solid-maple-bat';this.batMesh=wood;
+      const handle=this.mesh(new T.CylinderGeometry(.0128,.012,.185,20),this.materials.grip);handle.rotation.z=-Math.PI/2;handle.position.x=.008;
+      for(let i=0;i<12;i++){const ring=this.mesh(new T.TorusGeometry(.0128,.0009,4,16),this.materials.wrap);ring.rotation.y=Math.PI/2;ring.position.x=-.071+i*.014;}
+      const end=this.mesh(new T.CircleGeometry(.019,24),this.materials.end);end.rotation.y=Math.PI/2;end.position.x=.9455;
+      const cap=this.mesh(new T.TorusGeometry(.020,.001,4,24),this.materials.gold);cap.rotation.y=Math.PI/2;cap.position.x=.9458;
+    }
+    mergeRigMeshes(){
+      this.root.updateMatrixWorld(true);const groups=new Map(),original=[];
+      this.root.traverse(mesh=>{if(!mesh.isMesh||mesh.parent!==this.root)return;original.push(mesh);const geometry=mesh.geometry.index?mesh.geometry.toNonIndexed():mesh.geometry.clone();geometry.applyMatrix4(mesh.matrixWorld);if(!groups.has(mesh.material))groups.set(mesh.material,[]);groups.get(mesh.material).push(geometry);});
+      original.forEach(mesh=>{mesh.removeFromParent();mesh.geometry.dispose();});
+      for(const [material,parts] of groups){
+        const geometry=new T.BufferGeometry();
+        for(const name of ['position','normal','uv']){const size=name==='uv'?2:3;const length=parts.reduce((sum,p)=>sum+p.attributes[name].array.length,0),data=new Float32Array(length);let offset=0;parts.forEach(p=>{data.set(p.attributes[name].array,offset);offset+=p.attributes[name].array.length;});geometry.setAttribute(name,new T.BufferAttribute(data,size));}
+        const mesh=this.mesh(geometry,material);if(material===this.materials.wood){mesh.name='solid-maple-bat';this.batMesh=mesh;}parts.forEach(p=>p.dispose());
+      }
+    }
+    resize(){
+      const rect=this.surface.getBoundingClientRect();this.width=rect.width;this.height=rect.height;this.ratio=rect.height/rect.width;
+      this.camera.top=this.ratio;this.camera.updateProjectionMatrix();
+      const dpr=Math.min(devicePixelRatio||1,2);
+      if(this.renderer){this.renderer.setPixelRatio(dpr);this.renderer.setSize(this.width,this.height,false);}
+      else if(this.context){this.canvas.width=Math.round(this.width*dpr);this.canvas.height=Math.round(this.height*dpr);this.dpr=dpr;}
+    }
+    configure(target,lead,follow,miss,row,column=2){
+      const vertical=clamp((row-2)/2,-1,1),horizontal=clamp((column-2)/2,-1,1);
+      const name=row<2?'high':row===2?'middle':'low';
+      // Blend all five rows and columns: high pitches use a raised barrel, low ones a dropped barrel.
+      const profile={finishAngle:radians(68-4*vertical),sweep:108+6*vertical-4*horizontal};
+      const point={x:target.x/this.width,y:target.y/this.width};
+      // Place the end-face center on the ball; the handle may stay outside the frame.
+      // Right-side pitches use a longer projected reach; left-side pitches stay more closed.
+      const yaw=radians(25-8*horizontal),dy=Math.sin(radians(7-13*vertical));
+      const gripForward=.038-.008*horizontal,gripRise=.013+.004*vertical;
+      const attackAngle=34+3*vertical-2*horizontal;
+      const pivot={
+        x:point.x-this.length*Math.sqrt(1-dy*dy)*Math.cos(yaw),
+        y:point.y+(miss?.055:0)+this.length*dy
+      };
+      // Solve the upward impact tangent independently of the barrel's pitch and reach.
+      const projected=Math.sqrt(1-dy*dy),attack=Math.tan(radians(attackAngle));
+      const forward=gripForward+this.length*radians(48)*projected*Math.sin(yaw);
+      const coupling=this.length*dy*Math.cos(yaw)/projected;
+      const contactRise=(attack*forward-gripRise)/(this.length+attack*coupling);
+      const elevation=Math.asin(dy),elevationRise=contactRise/Math.cos(elevation);
+      const swingDuration=Math.min(lead,120),swingStart=lead-swingDuration;
+      const config={point,pivot,profile,name,row,column,lead,follow,miss,dy,yaw,contactRise,elevation,elevationRise,gripForward,gripRise,attackAngle,swingDuration,swingStart,ratio:this.ratio,length:this.length};
+      // Use world-space distance so foreshortening cannot produce an angular-speed spike.
+      const table=(from,to)=>{const values=[];let distance=0,previous;for(let i=0;i<=180;i++){const q=from+(to-from)*i/180,pose=this.pose(config,q);if(previous)distance+=pose.sweet.distanceTo(previous);values.push({q,distance});previous=pose.sweet;}return{values,distance};};
+      config.approach=table(-1,0);config.finish=table(0,1);
+      // Keep the loaded pose hidden, then reveal only once the bat is visibly moving.
+      config.revealTime=lead-Math.min(lead,80);
+      // Preserve contact speed, then retain momentum until the bat has left the frame.
+      config.contactSpeed=3*config.approach.distance/swingDuration;
+      config.entryRate=config.contactSpeed*follow/config.finish.distance;
+      config.exitRate=.75;
+      if(config.entryRate>1){
+        // Integrate a speed that approaches a positive floor, rather than easing to a stop.
+        let low=0,high=64;
+        for(let i=0;i<40;i++){
+          const k=(low+high)/2;
+          const distance=config.exitRate+(config.entryRate-config.exitRate)*(-Math.expm1(-k))/k;
+          if(distance>1)low=k;else high=k;
+        }
+        config.finishDecay=(low+high)/2;
+      }
+      return config;
+    }
+    pose(g,q){
+      const contact=q>=0;
+      const x=g.pivot.x+g.gripForward*q-(contact?.070*q*q:0);
+      const y=g.pivot.y-g.gripRise*q-(contact?.032*q*q:0);
+      // Approach below contact, then carry the end of the bat upward through the ball.
+      // Lift the barrel through a vertical arc, rather than wrapping it sideways first.
+      // A curved lift keeps the contact tangent smooth and carries the bat up during follow-through.
+      const lift=g.elevation+g.elevationRise*q+(contact?(g.profile.finishAngle-g.elevation-g.elevationRise)*q*q:0);
+      const cy=Math.sin(lift);
+      const turn=48*q+(contact?(g.profile.sweep-48)*q*q:0);
+      const yaw=g.yaw-turn*Math.PI/180;
+      const dx=Math.sqrt(Math.max(0,1-cy*cy))*Math.cos(yaw);
+      // Camera is on +Z; the barrel must pass through contact toward the field (-Z).
+      const zSign=Math.sign(Math.sin(yaw)||1),dz=zSign*Math.sqrt(Math.max(0,1-dx*dx-cy*cy));
+      const grip=V(x,g.ratio-y,.05-.03*q);
+      const direction=V(dx,cy,dz).normalize();
+      const sweet=grip.clone().addScaledVector(direction,this.length);
+      return {grip,direction,sweet,q};
+    }
+    progress(table,fraction){
+      const d=clamp(fraction,0,1)*table.distance,values=table.values;
+      let low=0,high=values.length-1;
+      while(low+1<high){const mid=(low+high)>>1;if(values[mid].distance<d)low=mid;else high=mid;}
+      const a=values[low],b=values[high];return a.q+(b.q-a.q)*(d-a.distance)/(b.distance-a.distance||1);
+    }
+    sample(g,time){
+      const start=g.swingStart;let q=-1;
+      if(time>start&&time<=g.lead)q=this.progress(g.approach,Math.pow((time-start)/(g.lead-start),3));
+      else if(time>g.lead){
+        const t=clamp((time-g.lead)/g.follow,0,1);
+        const distance=g.finishDecay
+          ? g.exitRate*t+(g.entryRate-g.exitRate)*(-Math.expm1(-g.finishDecay*t))/g.finishDecay
+          : g.entryRate*t+(1-g.entryRate)*t*t;
+        q=this.progress(g.finish,distance);
+      }
+      const pose=this.pose(g,q);
+      // Only fully opaque or fully hidden: no fading, ghost poses, or motion trails.
+      pose.alpha=time>=g.revealTime&&time<g.lead+g.follow?1:0;
+      return pose;
+    }
+    draw(g,time){
+      if(!this.available||this.contextLost)return;
+      const p=this.sample(g,time);
+      this.root.visible=p.alpha>0;this.root.position.copy(p.grip);
+      // Keep the bat surface stable as the swing climbs through the hitting plane.
+      const up=V(0,1,0).addScaledVector(p.direction,-p.direction.y).normalize();
+      const normal=p.direction.clone().cross(up).normalize();
+      this.root.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(p.direction,up,normal));
+      this.root.updateMatrixWorld(true);
+      this.canvas.style.opacity=String(p.alpha);
+      this.canvas.dataset.profile=g.name;this.canvas.dataset.zone=g.row+','+g.column;this.canvas.dataset.phase=time<g.swingStart?'load':time<g.lead?'swing':'follow';
+      if(this.renderer)this.renderer.render(this.scene,this.camera);else this.drawSoftware();
+      this.lastPose=p;
+    }
+    drawSoftware(){
+      const ctx=this.context,w=this.width,h=this.height,dpr=this.dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+      this.scene.updateMatrixWorld(true);const faces=[],light=V(.35,.7,1).normalize();
+      this.scene.traverse(obj=>{if(!obj.isMesh)return;let visible=true;for(let p=obj;p;p=p.parent)if(!p.visible)visible=false;if(!visible)return;
+        const pos=obj.geometry.attributes.position,idx=obj.geometry.index;const n=idx?idx.count:pos.count;
+        for(let i=0;i<n;i+=3){const vertices=[0,1,2].map(k=>V().fromBufferAttribute(pos,idx?idx.getX(i+k):i+k).applyMatrix4(obj.matrixWorld));const normal=vertices[1].clone().sub(vertices[0]).cross(vertices[2].clone().sub(vertices[0])).normalize();if(normal.z<=0)continue;const color=obj.material.color.clone().multiplyScalar(.60+.6*Math.max(0,normal.dot(light)));faces.push({v:vertices,z:vertices.reduce((a,p)=>a+p.z,0)/3,color:'#'+color.getHexString()});}
+      });
+      faces.sort((a,b)=>a.z-b.z);for(const face of faces){ctx.beginPath();face.v.forEach((v,i)=>{const x=v.x*w,y=(this.ratio-v.y)*w;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.closePath();ctx.fillStyle=face.color;ctx.fill();}
+    }
+    play(target,lead,follow,miss,row,column=2){
+      this.cancel();if(!lead&&!follow)return null;
+      this.resize();const config=this.configure(target,lead,follow,miss,row,column),rig=this;
+      let start=document.timeline.currentTime,paused=false,held=0,frame=0,done=false,resolve;
+      const finished=new Promise(r=>resolve=r);
+      const controller={config,contactTime:lead,companions:[],finished,
+        get startTime(){return start},set startTime(v){start=v},
+        get currentTime(){return paused?held:document.timeline.currentTime-start},
+        set currentTime(v){held=v;start=document.timeline.currentTime-v;rig.draw(config,v)},
+        pause(){held=this.currentTime;paused=true;cancelAnimationFrame(frame)},
+        play(){if(done)return;start=document.timeline.currentTime-held;paused=false;frame=requestAnimationFrame(tick)},
+        cancel(){if(done)return;done=true;cancelAnimationFrame(frame);resolve();},
+        seek(time){this.pause();this.currentTime=time;}
+      };
+      function tick(){if(done||paused)return;const time=controller.currentTime;rig.draw(config,Math.min(time,lead+follow));if(time>=lead+follow){done=true;resolve();}else frame=requestAnimationFrame(tick);}
+      this.active=controller;this.draw(config,0);frame=requestAnimationFrame(tick);return controller;
+    }
+    cancel(){if(this.active)this.active.cancel();this.active=null;this.canvas.style.opacity='0';if(this.renderer)this.renderer.clear();else if(this.context)this.context.clearRect(0,0,this.canvas.width,this.canvas.height);}
+    inspect(g,time){const p=this.sample(g,time);return{profile:g.name,grip:{x:p.grip.x*this.width,y:(g.ratio-p.grip.y)*this.width},contact:{x:p.sweet.x*this.width,y:(g.ratio-p.sweet.y)*this.width},length:p.grip.distanceTo(p.sweet),alpha:p.alpha,q:p.q};}
+  }
+  window.BaseballSwing=BaseballSwing;
+})();
