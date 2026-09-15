@@ -6,9 +6,9 @@
   const smooth = t => { t = clamp(t, 0, 1); return t*t*(3-2*t); };
   const V = (x=0,y=0,z=0) => new T.Vector3(x,y,z);
   const PROFILES = {
-    high: { loadLift: .02, finishLift: .14, sweep: 58 },
-    middle: { loadLift: .03, finishLift: .24, sweep: 64 },
-    low: { loadLift: .04, finishLift: .34, sweep: 70 }
+    high: { loadLift: .02, finishLift: .14, sweep: 126 },
+    middle: { loadLift: .03, finishLift: .24, sweep: 136 },
+    low: { loadLift: .04, finishLift: .34, sweep: 146 }
   };
   class BaseballSwing {
     constructor(canvas, surface) {
@@ -105,10 +105,21 @@
       const config={point,pivot,profile,name,lead,follow,miss,dy,yaw,contactRise,ratio:this.ratio,length:this.length};
       const table=(from,to)=>{const values=[];let distance=0,previous;for(let i=0;i<=180;i++){const q=from+(to-from)*i/180,pose=this.pose(config,q);if(previous)distance+=Math.hypot(pose.sweet.x-previous.x,pose.sweet.y-previous.y);values.push({q,distance});previous=pose.sweet;}return{values,distance};};
       config.approach=table(-1,0);config.finish=table(0,1);
-      // Match the speed through contact; the follow-through then loses speed progressively.
+      // Preserve contact speed, then retain momentum until the bat has left the frame.
       const swingDuration=lead*.38;
       config.contactSpeed=3*config.approach.distance/swingDuration;
-      config.finishPower=clamp(config.contactSpeed*follow/config.finish.distance,1.25,5.5);
+      config.entryRate=config.contactSpeed*follow/config.finish.distance;
+      config.exitRate=.75;
+      if(config.entryRate>1){
+        // Integrate a speed that approaches a positive floor, rather than easing to a stop.
+        let low=0,high=64;
+        for(let i=0;i<40;i++){
+          const k=(low+high)/2;
+          const distance=config.exitRate+(config.entryRate-config.exitRate)*(-Math.expm1(-k))/k;
+          if(distance>1)low=k;else high=k;
+        }
+        config.finishDecay=(low+high)/2;
+      }
       return config;
     }
     pose(g,q){
@@ -136,9 +147,15 @@
     sample(g,time){
       const start=g.lead*.62;let q=-1;
       if(time>start&&time<=g.lead)q=this.progress(g.approach,Math.pow((time-start)/(g.lead-start),3));
-      else if(time>g.lead)q=this.progress(g.finish,1-Math.pow(1-clamp((time-g.lead)/g.follow,0,1),g.finishPower));
+      else if(time>g.lead){
+        const t=clamp((time-g.lead)/g.follow,0,1);
+        const distance=g.finishDecay
+          ? g.exitRate*t+(g.entryRate-g.exitRate)*(-Math.expm1(-g.finishDecay*t))/g.finishDecay
+          : g.entryRate*t+(1-g.entryRate)*t*t;
+        q=this.progress(g.finish,distance);
+      }
       const pose=this.pose(g,q);
-      pose.alpha=smooth(time/Math.min(85,g.lead*.2))*(1-smooth((time-g.lead-g.follow*.72)/(g.follow*.28)));
+      pose.alpha=smooth(time/Math.min(85,g.lead*.2))*(1-smooth((time-g.lead-g.follow*.30)/(g.follow*.60)));
       return pose;
     }
     draw(g,time){
