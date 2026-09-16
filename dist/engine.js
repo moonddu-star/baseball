@@ -1,16 +1,132 @@
-(function(root){
-'use strict';
-function choose(n,k){if(k<0||k>n)return 0n;let r=1n;for(let i=1;i<=k;i++)r=r*BigInt(n-i+1)/BigInt(i);return r;}
-function randomInt(max){const limit=4294967296-(4294967296%max);const a=new Uint32Array(1);do{globalThis.crypto.getRandomValues(a)}while(a[0]>=limit);return a[0]%max;}
-function multiplier(m,k){if(k===0)return 1;return Number(99n*choose(25,k))/Number(100n*choose(25-m,k));}
-function payout(bet,m,k){if(k===0)return 0;return Number(BigInt(bet)*99n*choose(25,k)/(100n*choose(25-m,k)));}
-class MinesGame{
- constructor(random=randomInt){this.random=random;this.balance=100000;this.status='ready';this.bet=10000;this.mines=3;this.hits=new Set();this.hazards=new Set();this.lastPayout=0;this.triggered=null;}
- start(bet,mines){if(this.status==='playing')throw Error('진행 중인 라운드를 먼저 마쳐주세요.');if(!Number.isSafeInteger(bet)||bet<100||bet>100000)throw Error('베팅은 1~1,000 CR로 입력하세요.');if(bet>this.balance)throw Error('크레딧이 부족합니다. 베팅을 줄이거나 초기화하세요.');if(!Number.isInteger(mines)||mines<1||mines>24)throw Error('위험 코스는 1~24개로 설정하세요.');const cells=Array.from({length:25},(_,i)=>i);for(let i=24;i>0;i--){const j=this.random(i+1);if(!Number.isInteger(j)||j<0||j>i)throw Error('난수 오류');[cells[i],cells[j]]=[cells[j],cells[i]]}this.hazards=new Set(cells.slice(0,mines));this.hits=new Set();this.balance-=bet;this.bet=bet;this.mines=mines;this.lastPayout=0;this.triggered=null;this.status='playing';return this.snapshot();}
- reveal(index){if(this.status!=='playing')throw Error('먼저 타석에 들어서세요.');if(!Number.isInteger(index)||index<0||index>=25)throw Error('유효한 코스를 선택하세요.');if(this.hits.has(index))throw Error('이미 타격한 코스입니다.');if(this.hazards.has(index)){this.status='out';this.triggered=index;return 'out';}this.hits.add(index);if(this.hits.size===25-this.mines){this.cashout();this.status='cleared';return 'cleared';}return 'hit';}
- cashout(){if(this.status!=='playing'||this.hits.size===0)throw Error('1회 이상 성공해야 상금을 확정할 수 있습니다.');this.lastPayout=payout(this.bet,this.mines,this.hits.size);this.balance+=this.lastPayout;this.status='cashed';return this.lastPayout;}
- reset(){if(this.status==='playing')throw Error('라운드 중에는 초기화할 수 없습니다.');this.balance=100000;this.status='ready';this.hits.clear();this.hazards.clear();this.lastPayout=0;this.triggered=null;return this.snapshot();}
- snapshot(){const k=this.hits.size,active=this.status==='playing';return {status:this.status,balance:this.balance,bet:this.bet,mines:this.mines,hits:[...this.hits],multiplier:multiplier(this.mines,k),nextMultiplier:k<25-this.mines?multiplier(this.mines,k+1):null,cashout:active?payout(this.bet,this.mines,k):this.lastPayout,successProbability:(25-this.mines-k)/(25-k),remainingSafe:25-this.mines-k};}
-}
-const api={MinesGame,choose,multiplier,payout,randomInt};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.MinesEngine=api;
+(function (root) {
+  'use strict';
+  const balance = typeof module !== 'undefined' && module.exports ? require('./tiger-balance.js') : root.TigerBalance;
+  const symbolById = Object.fromEntries(balance.symbols.map(symbol => [symbol.id, symbol]));
+  function randomInt(max) {
+    if (!Number.isInteger(max) || max < 1 || max > 4294967296) throw Error('Invalid random range');
+    const limit = 4294967296 - (4294967296 % max), bytes = new Uint32Array(1);
+    do { globalThis.crypto.getRandomValues(bytes); } while (bytes[0] >= limit);
+    return bytes[0] % max;
+  }
+  function drawSymbol(weights, random) {
+    const ticket = random(10000);
+    if (!Number.isInteger(ticket) || ticket < 0 || ticket >= 10000) throw Error('Random number error');
+    let upper = 0;
+    for (let i = 0; i < weights.length; i++) {
+      upper += weights[i];
+      if (ticket < upper) return balance.symbols[i].id;
+    }
+    throw Error('Invalid probability table');
+  }
+  function shouldAutoCashOut(numerator, denominator, hitCount) {
+    return hitCount === balance.cells || numerator > BigInt(balance.threshold) * denominator;
+  }
+  class MinesGame {
+    #numerator = 1n;
+    #denominator = 1n;
+    #pending = null;
+    #board = Array(balance.cells).fill(null);
+    #difficulty = 'easy';
+    #rtpVersion;
+    constructor(random = randomInt, { rtpVersion = balance.activeVersion } = {}) {
+      if (!balance.initial[rtpVersion]) throw Error('Choose a supported RTP version.');
+      this.random = random; this.#rtpVersion = rtpVersion;
+      this.balance = 100000; this.bet = 10000; this.status = 'ready';
+      this.hits = new Set(); this.lastPayout = 0; this.triggered = null; this.completionReason = null;
+    }
+    get difficulty() { return this.#difficulty; }
+    get rtpVersion() { return this.#rtpVersion; }
+    setDifficulty(value) {
+      if (this.status === 'playing') throw Error('Difficulty is locked during a round.');
+      if (!balance.difficulties.includes(value)) throw Error('Choose Easy, Medium or Hard.');
+      this.#difficulty = value;
+    }
+    prepare() {
+      if (this.status === 'playing') throw Error('Finish the current round first.');
+      this.status = 'ready'; this.hits.clear(); this.#board.fill(null); this.#pending = null;
+      this.#numerator = 1n; this.#denominator = 1n;
+      this.lastPayout = 0; this.triggered = null; this.completionReason = null;
+      return this.snapshot();
+    }
+    start(bet, difficulty = this.#difficulty) {
+      if (this.status === 'playing') throw Error('Finish the current round first.');
+      // Existing POC credit limits are retained; this migration changes difficulty/symbol math.
+      if (!Number.isSafeInteger(bet) || bet < 100 || bet > 100000) throw Error('Enter a bet from 1 to 1,000 CR.');
+      if (bet > this.balance) throw Error('Not enough credits. Lower your bet or reset your balance.');
+      if (!balance.difficulties.includes(difficulty)) throw Error('Choose Easy, Medium or Hard.');
+      this.prepare(); this.#difficulty = difficulty; this.bet = bet; this.balance -= bet; this.status = 'playing';
+      return this.snapshot();
+    }
+    #validateCell(index) {
+      if (this.status !== 'playing') throw Error('Step up to the plate first.');
+      if (!Number.isInteger(index) || index < 0 || index >= balance.cells) throw Error('Select a valid zone.');
+      if (this.#board[index] !== null) throw Error('This zone has already been played.');
+      if (this.#pending && this.#pending.index !== index) throw Error('A swing is already in progress.');
+    }
+    reserve(index) {
+      this.#validateCell(index);
+      // Draw once on selection so the pitch animation can show HIT/miss correctly.
+      // Keep the reserved result private until contact, including in snapshot().
+      if (!this.#pending) {
+        const weights = this.hits.size === 0 ? balance.initial[this.#rtpVersion][this.#difficulty] : balance.secondary[this.#difficulty];
+        this.#pending = { index, symbol: drawSymbol(weights, this.random) };
+      }
+      return this.#pending.symbol;
+    }
+    #completedBoard(board) {
+      return board.map(symbol => symbol === null ? drawSymbol(balance.secondary[this.#difficulty], this.random) : symbol);
+    }
+    #payout(numerator = this.#numerator, denominator = this.#denominator) {
+      return Number(BigInt(this.bet) * numerator / denominator);
+    }
+    reveal(index) {
+      const symbol = this.reserve(index), board = this.#board.slice();
+      board[index] = symbol;
+      if (symbol === 'out') {
+        const completed = this.#completedBoard(board);
+        this.#board = completed; this.#pending = null; this.triggered = index; this.lastPayout = 0; this.status = 'out';
+        return 'out';
+      }
+      const numerator = this.#numerator * BigInt(symbolById[symbol].factor), denominator = this.#denominator * 100n;
+      const automatic = shouldAutoCashOut(numerator, denominator, this.hits.size + 1);
+      const completed = automatic ? this.#completedBoard(board) : board;
+      this.#numerator = numerator; this.#denominator = denominator;
+      this.#board = completed; this.#pending = null; this.hits.add(index);
+      if (automatic) {
+        this.lastPayout = this.#payout(); this.balance += this.lastPayout; this.status = 'cleared';
+        this.completionReason = this.hits.size === balance.cells ? 'board' : 'threshold';
+        return 'cleared';
+      }
+      return 'hit';
+    }
+    cashout() {
+      if (this.status !== 'playing' || this.hits.size === 0) throw Error('Land at least one hit before cashing out.');
+      if (this.#pending) throw Error('Wait for the current swing to finish.');
+      const completed = this.#completedBoard(this.#board);
+      this.lastPayout = this.#payout(); this.balance += this.lastPayout;
+      this.#board = completed; this.status = 'cashed';
+      return this.lastPayout;
+    }
+    reset() {
+      if (this.status === 'playing') throw Error('Finish the round before resetting.');
+      this.prepare(); this.balance = 100000;
+      return this.snapshot();
+    }
+    snapshot() {
+      const active = this.status === 'playing', multiplier = this.status === 'out' ? 0 : Number(this.#numerator) / Number(this.#denominator);
+      return {
+        status: this.status, balance: this.balance, bet: this.bet, difficulty: this.#difficulty,
+        rtpVersion: this.#rtpVersion, rtp: balance.rtp[this.#rtpVersion], hits: [...this.hits], board: this.#board.slice(),
+        multiplier, displayMultiplier: this.status === 'out' ? 0 : Number(this.#numerator * 100n / this.#denominator) / 100,
+        cashout: active ? this.hits.size ? this.#payout() : 0 : this.lastPayout,
+        successProbability: 1 - balance.secondary[this.#difficulty][0] / 10000,
+        playedCells: this.hits.size + (this.triggered === null ? 0 : 1),
+        remainingCells: this.#board.filter(symbol => symbol === null).length,
+        completionReason: this.completionReason
+      };
+    }
+  }
+  const api = { MinesGame, balance, symbolById, drawSymbol, shouldAutoCashOut, randomInt };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.MinesEngine = api;
 })(globalThis);

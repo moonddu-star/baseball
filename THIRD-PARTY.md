@@ -18,3 +18,55 @@
 - Historical v6 distribution: poc/assets/legacy/batting-hands.js exposes window.BattingHands, with separate left/right geometry. The v7 page does not load this file or use these meshes; the files and license are retained for the v6 source history.
 
 The current bat geometry, swing timing, and ascending path in poc/src/game/fx/baseball-swing.js were authored for this POC. The historical v6 anatomical hand geometry derives from the WebXR assets above.
+
+## Project-provided background music
+
+- Original project file: source-assets/sounds/baseball_bg.mp3 (preserved unchanged).
+- Runtime copy: poc/assets/sounds/baseball-bg.mp3, distributed as dist/assets/baseball-bg.mp3.
+- No external music download was used. Authorship/license metadata was not supplied with this file; this entry records its project provenance without asserting a license.
+- Gameplay sound effects are synthesized by this POC's Web Audio code and contain no third-party sound samples.
+## Google Fonts — Barlow Condensed and Anton
+
+- Downloaded from the official Google Fonts repository on 2026-09-16.
+- Barlow Condensed: https://github.com/google/fonts/tree/main/ofl/barlowcondensed — Jeremy Tribby / The Barlow Project Authors.
+- Anton: https://github.com/google/fonts/tree/main/ofl/anton — Vernon Adams / The Anton Project Authors.
+- License: SIL Open Font License 1.1. Full unmodified texts: poc/assets/fonts/barlow-condensed-license.txt and poc/assets/fonts/anton-license.txt.
+- Unmodified TTF files are stored in poc/assets/fonts and copied with licenses to dist/assets/fonts. Only filenames were normalized to kebab-case.
+- Barlow Condensed: Regular 400, SemiBold 600, Bold 700, Black 900, Black Italic 900. Anton: Regular 400.
+- Local hosting requires no runtime third-party font service. These are stylistic alternatives, not identified fonts from MLB The Show 26.
+
+## Google Fonts — Oswald
+
+- Source: https://github.com/google/fonts/tree/main/ofl/oswald (downloaded 2026-09-16).
+- Designers: Vernon Adams, Kalapi Gajjar, Cyreal. Copyright: The Oswald Project Authors.
+- License: SIL Open Font License 1.1; full text in poc/assets/fonts/oswald-license.txt.
+- Unmodified variable TTF (weights 200–700), renamed oswald-variable.ttf, stored in poc/assets/fonts and distributed with its license in dist/assets/fonts.
+- The game title uses upright Bold 700. The previous Barlow Black Italic title font is no longer loaded.
+
+## Additional project-provided sounds
+
+- Original user-supplied files: source-assets/sounds/click.mp3, hit.mp3, out.mp3, intro_bg.mp3.
+- Unmodified runtime copies: poc/assets/sounds/sfx-click.mp3, sfx-hit.mp3, sfx-out.mp3, intro-bg.mp3; distributed in dist/assets.
+- Origin is the supplied project folder; no authorship or license is asserted. Original bytes are preserved. Playback gain and sample start offsets are runtime settings only.
+
+## Day stadium background
+
+- AI-edited with the built-in image_gen tool at the user’s explicit request, using the existing poc/assets/images/stadium-clean.png as the visual reference. No third-party asset download was used.
+- Master: source-assets/images/stadium-day.png. Runtime copy: poc/assets/images/stadium-day.png; distributed as dist/assets/stadium-day.png.
+- Prompt and edit scope: doc/stadium-day-prompt.md. The reference night background remains unchanged.
+
+## Google Fonts — Barlow Bold (normal width)
+
+- Source: https://github.com/google/fonts/tree/main/ofl/barlow (downloaded 2026-09-16). Designer: Jeremy Tribby / The Barlow Project Authors.
+- SIL Open Font License 1.1; full text: poc/assets/fonts/barlow-license.txt.
+- Unmodified Barlow-Bold.ttf renamed barlow-bold.ttf, locally distributed with its license. Used for the wider OUT! callout at weight 700.
+
+- Barlow ExtraBold 800: unmodified Barlow-ExtraBold.ttf from https://github.com/google/fonts/tree/main/ofl/barlow, saved as poc/assets/fonts/barlow-extrabold.ttf. Covered by the same SIL OFL in barlow-license.txt. Used for both HIT! and OUT! callouts.
+
+## Baseball hit tile sprite
+
+`poc/assets/images/baseball-hit-icon.png` was generated for this project with the built-in OpenAI image generation tool at the user’s request. The transparent master is in `source-assets/images/baseball-hit-icon.png`; prompt and integration notes are in `doc/baseball-hit-icon.md`.
+
+## Difficulty pitcher characters
+
+`poc/assets/images/pitcher-medium.png` and `pitcher-hard.png` were generated for this project with the built-in OpenAI image generation tool at the user’s request. Transparent masters are retained under `source-assets/images/`. Full prompts and integration details are recorded in `doc/difficulty-pitchers.md`. Easy uses the existing pitcher sprite sheet.

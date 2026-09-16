@@ -18,6 +18,8 @@ test('preview serves assets and rejects escaping or malformed paths', async t =>
   assert.equal((await request('/')).status, 200);
   assert.match((await request('/app.js')).type, /javascript/);
   assert.equal((await request('/assets/stadium-clean.png')).status, 200);
+  const music = await request('/assets/baseball-bg.mp3');
+  assert.equal(music.status, 200); assert.match(music.type, /audio\/mpeg/);
   assert.equal((await request('/missing.png')).status, 404);
   assert.equal((await request('/%2e%2e%2fpackage.json')).status, 403);
   assert.equal((await request('/%')).status, 400);

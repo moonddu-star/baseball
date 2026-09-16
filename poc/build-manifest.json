@@ -9,9 +9,30 @@
     "poc/vendor/hand-models-license.txt": "vendor/HAND-MODELS-LICENSE.txt",
     "poc/assets/images/bat.png": "assets/bat.png",
     "poc/assets/images/stadium-clean.png": "assets/stadium-clean.png",
-    "poc/assets/images/stadium-background.png": "assets/stadium-background.png",
     "poc/assets/images/pitcher-sprites.png": "assets/pitcher-sprites.png",
-    "poc/assets/legacy/batting-hands.js": "assets/batting-hands.js"
+    "poc/assets/legacy/batting-hands.js": "assets/batting-hands.js",
+    "poc/assets/sounds/baseball-bg.mp3": "assets/baseball-bg.mp3",
+    "poc/assets/fonts/barlow-condensed-regular.ttf": "assets/fonts/barlow-condensed-regular.ttf",
+    "poc/assets/fonts/barlow-condensed-semibold.ttf": "assets/fonts/barlow-condensed-semibold.ttf",
+    "poc/assets/fonts/barlow-condensed-bold.ttf": "assets/fonts/barlow-condensed-bold.ttf",
+    "poc/assets/fonts/barlow-condensed-black.ttf": "assets/fonts/barlow-condensed-black.ttf",
+    "poc/assets/fonts/anton-regular.ttf": "assets/fonts/anton-regular.ttf",
+    "poc/assets/fonts/barlow-condensed-license.txt": "assets/fonts/barlow-condensed-license.txt",
+    "poc/assets/fonts/anton-license.txt": "assets/fonts/anton-license.txt",
+    "poc/assets/fonts/oswald-variable.ttf": "assets/fonts/oswald-variable.ttf",
+    "poc/assets/fonts/oswald-license.txt": "assets/fonts/oswald-license.txt",
+    "poc/assets/sounds/sfx-click.mp3": "assets/sfx-click.mp3",
+    "poc/assets/sounds/sfx-hit.mp3": "assets/sfx-hit.mp3",
+    "poc/assets/sounds/sfx-out.mp3": "assets/sfx-out.mp3",
+    "poc/assets/sounds/intro-bg.mp3": "assets/intro-bg.mp3",
+    "poc/assets/images/stadium-day.png": "assets/stadium-day.png",
+    "poc/assets/fonts/barlow-bold.ttf": "assets/fonts/barlow-bold.ttf",
+    "poc/assets/fonts/barlow-license.txt": "assets/fonts/barlow-license.txt",
+    "poc/assets/fonts/barlow-extrabold.ttf": "assets/fonts/barlow-extrabold.ttf",
+    "poc/assets/images/baseball-hit-icon.png": "assets/baseball-hit-icon.png",
+    "poc/src/domain/tiger-balance.js": "tiger-balance.js",
+    "poc/assets/images/pitcher-medium.png": "assets/pitcher-medium.png",
+    "poc/assets/images/pitcher-hard.png": "assets/pitcher-hard.png"
   },
   "scripts": [
     "poc/src/game/shared/format.js",
@@ -21,6 +42,7 @@
     "poc/src/game/ui/bind-controls.js",
     "poc/src/game/fx/pitch-effects.js",
     "poc/src/integration/model-context.js",
+    "poc/src/game/fx/pitcher-aura.js",
     "poc/src/game/game-main.js"
   ]
 }

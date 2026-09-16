@@ -1,14 +1,18 @@
-function createPitchEffects({ $, surface, batRig }) {
-  function flash(text, red = false) {
-    const el = $('feedback'); el.textContent = text; el.className = 'feedback' + (red ? ' red' : '');
+function createPitchEffects({ $, surface, batRig, phaseSurface = surface }) {
+  let pitcherRun = 0;
+  function flash(text, red = false, hold = false) {
+    const el = $('feedback'); el.textContent = text; el.className = 'feedback' + (red ? ' red' : '') + (hold ? ' hold' : '');
     void el.offsetWidth; el.classList.add('show');
   }
   function clearEffects() {
+    pitcherRun++;
+    $('pitcher').getAnimations().forEach(animation => animation.cancel());
+    $('pitcher').style.transform = 'none'; $('pitcher').dataset.phase = 'ready';
     batRig.cancel();
     [$('pitch'), $('contact'), $('pitcher-ghost')].forEach(el => { el.getAnimations().forEach(animation => animation.cancel()); el.style.opacity = '0'; });
-    $('feedback').classList.remove('show'); surface.dataset.phase = 'idle'; pitcherFrame(0, false); $('pitcher-ghost').getAnimations().forEach(a => a.cancel()); $('pitcher-ghost').style.opacity = '0';
+    $('feedback').classList.remove('show', 'hold'); phaseSurface.dataset.phase = 'idle'; pitcherFrame(0, false); $('pitcher-ghost').getAnimations().forEach(a => a.cancel()); $('pitcher-ghost').style.opacity = '0';
   }
-  function pitcherFrame(frame, blend = true) {
+  function pitcherFrame(frame, blend = true, blendDuration = 65) {
     const actor = $('pitcher'), ghost = $('pitcher-ghost');
     const previous = Number(actor.dataset.frame || 0);
     actor.dataset.frame = String(frame);
@@ -16,39 +20,71 @@ function createPitchEffects({ $, surface, batRig }) {
     ghost.style.opacity = '0';
     if (blend && previous !== frame && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       ghost.style.backgroundPosition = (previous / 3 * 100) + '% center';
-      ghost.animate([{ opacity: .8 }, { opacity: 0 }], { duration: 65, easing: 'ease-out' });
+      ghost.animate([{ opacity: .8 }, { opacity: 0 }], { duration: blendDuration, easing: 'ease-out' });
     }
     actor.style.backgroundPosition = (frame / 3 * 100) + '% center';
+  }
+  async function pitcherStep(frame, phase, transform, duration, run) {
+    if (run !== pitcherRun) return false;
+    const actor = $('pitcher'), previous = getComputedStyle(actor).transform;
+    actor.getAnimations().forEach(animation => animation.cancel());
+    actor.dataset.phase = phase;
+    pitcherFrame(frame, duration > 0, Math.min(75, duration * .5));
+    actor.style.transform = transform;
+    if (!duration) return run === pitcherRun;
+    const animation = actor.animate([{ transform: previous }, { transform }], {
+      duration, easing: 'cubic-bezier(.22,.61,.36,1)'
+    });
+    try { await animation.finished; } catch { return false; }
+    return run === pitcherRun;
+  }
+  async function windPitch(wind, release) {
+    const run = ++pitcherRun;
+    if (!wind && !release) { pitcherFrame(0, false); return; }
+    const stages = [
+      [0, 'set', 'translate(0, .3%) rotate(0deg)', wind * .22],
+      [1, 'leg-lift', 'translate(-.6%, -.5%) rotate(-.4deg)', wind * .45],
+      [1, 'load', 'translate(-1.2%, 0) rotate(-.8deg)', wind * .33],
+      [2, 'release', 'translate(.8%, .4%) rotate(.5deg)', release]
+    ];
+    // Use one deadline so frame waits between stages do not lengthen the delivery.
+    let deadline = performance.now();
+    for (const [frame, phase, transform, duration] of stages) {
+      deadline += duration;
+      if (!await pitcherStep(frame, phase, transform, Math.max(0, deadline - performance.now()), run)) return;
+    }
+  }
+  async function followPitch(flight) {
+    if (!flight) return;
+    const run = pitcherRun;
+    const stages = [
+      [2, 'extension', 'translate(1.2%, .6%) rotate(.8deg)', flight * .12],
+      [3, 'follow-through', 'translate(.8%, .3%) rotate(.4deg)', flight * .68],
+      [0, 'recovery', 'translate(0, 0) rotate(0deg)', flight * .55]
+    ];
+    for (const stage of stages) if (!await pitcherStep(...stage, run)) return;
+    if (run === pitcherRun) $('pitcher').dataset.phase = 'ready';
   }
   function releasePoint() {
     const anchor = $('release-point').getBoundingClientRect();
     const stage = surface.getBoundingClientRect();
     return { x: anchor.left - stage.left, y: anchor.top - stage.top };
   }
-  function swingBat(target, lead, follow, miss, row, column) {
-    return batRig.play(target, lead, follow, miss, row, column);
+  function hitDestination() {
+    const stage = surface.getBoundingClientRect(), pitcher = $('pitcher').getBoundingClientRect();
+    const center = pitcher.left + pitcher.width / 2 - stage.left;
+    // Pick one direction per hit, independently of the selected pitch zone.
+    // Keep that destination throughout flight and finish above the screen.
+    const side = Math.random() < .5 ? -1 : 1;
+    const spread = side * (.06 + Math.random() * .28);
+    return { x: center + stage.width * spread, y: -stage.height * .01 };
   }
-  function syncBatClock(animation, startTime) {
-    if (animation) animation.startTime = startTime;
+  function swingBat(target, lead, follow, miss, row, column, failureStyle) {
+    return batRig.play(target, lead, follow, miss, row, column, failureStyle);
   }
   async function animateBall(from, to, duration, hitBack = false, batClock = null) {
-    if (!duration) return;
-    const transform = (p, scale, rotation) => `translate3d(${p.x}px,${p.y}px,0) translate(-50%,-50%) scale(${scale}) rotate(${rotation}deg)`;
-    const mid = { x: from.x + (to.x - from.x) * .6, y: from.y + (to.y - from.y) * .45 - (hitBack ? 30 : 5) };
-    const animation = $('pitch').animate([
-      { transform: transform(from, hitBack ? 1 : .2, 0), opacity: 1, filter: 'blur(0px)' },
-      { transform: transform(mid, hitBack ? .65 : .65, 150), opacity: 1, offset: .6 },
-      { transform: transform(to, hitBack ? .06 : 1, 330), opacity: hitBack ? 0 : 1, filter: 'blur(.3px)' }
-    ], { duration, easing: hitBack ? 'ease-out' : 'cubic-bezier(.55,.05,.8,.55)', fill: 'forwards' });
-    if (batClock) {
-      if (hitBack) animation.startTime = batClock.startTime + batClock.contactTime;
-      else {
-        const startTime = document.timeline.currentTime;
-        animation.startTime = startTime;
-        syncBatClock(batClock, startTime - (batClock.contactTime - duration));
-      }
-    }
-    try { await animation.finished; } finally { animation.cancel(); }
+    $('pitch').style.opacity = '0';
+    await batRig.animateBall(from, to, duration, hitBack, batClock);
   }
-  return { flash, clearEffects, pitcherFrame, releasePoint, swingBat, animateBall };
+  return { flash, clearEffects, pitcherFrame, windPitch, followPitch, releasePoint, hitDestination, swingBat, animateBall };
 }

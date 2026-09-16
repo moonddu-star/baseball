@@ -28,7 +28,7 @@ npm start
 | 현재 POC 이미지 | `poc/assets/images/` |
 | 받은 제작 원본 | `source-assets/` |
 
-**`dist/`는 빌드 산출물입니다. 원본은 `poc/`에서 수정하세요.** 기존 가상 크레딧 규칙, 0.2초 상승 스윙과 배트 잔상·페이드 제거 동작을 유지했습니다.
+**`dist/`는 빌드 산출물입니다. 원본은 `poc/`에서 수정하세요.** 가상 크레딧 규칙을 유지합니다. 배트와 공은 같은 원근 카메라를 사용하며, 25개 코스에서 배트의 물리적 길이·두께가 같습니다. 화면에 보이는 크기는 거리와 회전에 따라 달라집니다. 스윙은 0.3초이며 굵은 배럴 옆면으로 공을 칩니다. 배트 잔상·페이드는 없습니다.
 
 ```powershell
 npm run build  # dist 재생성
@@ -43,7 +43,11 @@ npm test       # 룰·정산·서버 회귀 검사
 - [현재 폴더 구조·코드 의존성·에셋 관리](doc/project-structure.md)
 - [PixiBrown 목표 구조·씬 계층·이식 조건](doc/pixibrown-migration.md)
 - [제공받은 개발 스킬](doc/skills/SKILL.md)
-- [공통 디자인 가이드](doc/00_공통가이드_인덱스.md)
+- [공통 디자인 가이드 — skills 우선](doc/00_공통가이드_인덱스.md)
+- [디자인 점검·적용 결과](doc/design-audit.md)
+- [배팅 스윙 참고 자료·대안·개선 결과](doc/batting-swing.md)
+- [투수 배당 화염 오라](doc/pitcher-aura.md)
+- [배경음악·효과음과 재생 정책](doc/game-audio.md)
 - [v12.2까지의 상세 작업 기록](doc/history/poc-v12-2.md)
 - [외부 라이브러리와 모델 출처](THIRD-PARTY.md)
 
