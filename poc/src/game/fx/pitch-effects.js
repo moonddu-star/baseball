@@ -70,14 +70,14 @@ function createPitchEffects({ $, surface, batRig, phaseSurface = surface }) {
     const stage = surface.getBoundingClientRect();
     return { x: anchor.left - stage.left, y: anchor.top - stage.top };
   }
-  function hitDestination() {
+  function hitDestination(symbol) {
     const stage = surface.getBoundingClientRect(), pitcher = $('pitcher').getBoundingClientRect();
     const center = pitcher.left + pitcher.width / 2 - stage.left;
-    // Pick one direction per hit, independently of the selected pitch zone.
-    // Keep that destination throughout flight and finish above the screen.
+    // Choose once after contact; triple hits favor the deep left/right gaps.
+    const flight = batRig.hitProfile(symbol);
     const side = Math.random() < .5 ? -1 : 1;
-    const spread = side * (.06 + Math.random() * .28);
-    return { x: center + stage.width * spread, y: -stage.height * .01 };
+    const spread = side * (flight.spread + Math.random() * flight.spreadRange);
+    return { x: center + stage.width * spread, y: stage.height * flight.endY, flight };
   }
   function swingBat(target, lead, follow, miss, row, column, failureStyle) {
     return batRig.play(target, lead, follow, miss, row, column, failureStyle);

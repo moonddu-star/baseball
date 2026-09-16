@@ -5,7 +5,16 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const V = (x=0,y=0,z=0) => new T.Vector3(x,y,z);
   const radians = degrees => degrees*Math.PI/180;
+  // Presentation distances and heights are calibrated to the fixed stadium camera.
+  // They describe the awarded symbol, not a physics simulation of baseball scoring.
+  const HIT_FLIGHTS = Object.freeze({
+    single: Object.freeze({ duration: 620, depth: 26, arc: .08, endY: .295, spread: .24, spreadRange: .12, exitsTop: false }),
+    double: Object.freeze({ duration: 420, linear: true, depth: 38, arc: 0, endY: -.01, spread: .27, spreadRange: .12, exitsTop: true }),
+    triple: Object.freeze({ duration: 420, linear: true, depth: 52, arc: 0, endY: -.01, spread: .27, spreadRange: .12, exitsTop: true }),
+    'home-run': Object.freeze({ duration: 1150, depth: 64, arc: .25, endY: -.035, spread: .10, spreadRange: .22, exitsTop: true })
+  });
   class BaseballSwing {
+    hitProfile(symbol = 'single') { return HIT_FLIGHTS[symbol] || HIT_FLIGHTS.single; }
     constructor(canvas, surface) {
       this.canvas = canvas; this.surface = surface; this.active = null;
       this.tipX = .78; this.sweetX = .67; this.modelScale = 1;
@@ -231,13 +240,19 @@
         return {position,visible:time>=track.start&&t<1,done:t>=1,opacity:1-clamp((t-.75)/.25,0,1),rotation:t*Math.PI*4};
       }
       let from,to;
-      if(track.hitBack){from=g.point;to=this.onPlane({x:track.toUV.x*this.width,y:track.toUV.y*this.height},-24);}
+      const profile=track.hitBack?(track.profile||this.hitProfile()):null;
+      if(track.hitBack){from=g.point;to=this.onPlane({x:track.toUV.x*this.width,y:track.toUV.y*this.height},-profile.depth);}
       else {from=this.onPlane({x:track.fromUV.x*this.width,y:track.fromUV.y*this.height},-16);to=g.point;}
-      const u=t;
+      // Compensate for the very close batting camera: retain readable near-field travel
+      // instead of compressing almost the entire visible path into the first few frames.
+      // Doubles/triples use the original immediate, constant-speed line drive.
+      const u=profile&&!profile.linear?t/(1+profile.depth/5*(1-t)):t;
       const position=from.clone().lerp(to,u);
-      // A hit is a rising line drive. A large added arc would overshoot the field under perspective.
-      position.y+=(track.hitBack?0:.10)*Math.sin(Math.PI*u);
-      return {position,visible:time>=track.start&&(!track.hitBack||t<1),done:t>=1,opacity:1,rotation:t*Math.PI*4};
+      // Lift is zero at contact and arrival, preserving exact bat/ball contact.
+      // Singles descend into the outfield; extra-base hits finish wholly above the viewport.
+      position.y+=profile?4*profile.arc*u*(1-u):.10*Math.sin(Math.PI*u);
+      const opacity=profile&&!profile.exitsTop?1-clamp((t-.82)/.18,0,1):1;
+      return {position,visible:time>=track.start&&(!track.hitBack||t<1),done:t>=1,opacity,rotation:t*Math.PI*4};
     }
     animateBall(from,to,duration,hitBack,controller){
       if(!this.available||this.contextLost||!duration||!controller||controller.done||controller!==this.active)return Promise.resolve();
@@ -246,7 +261,7 @@
       if(!hitBack)controller.startTime=document.timeline.currentTime-(controller.config.lead-duration);
       return new Promise(resolve=>{
         this.ballTrack={fromUV:{x:from.x/this.width,y:from.y/this.height},toUV:{x:to.x/this.width,y:to.y/this.height},
-          start:hitBack?controller.config.lead:controller.config.lead-duration,duration,hitBack,pitchFromUV,resolve};
+          start:hitBack?controller.config.lead:controller.config.lead-duration,duration,hitBack,pitchFromUV,profile:hitBack?to.flight:null,resolve};
         this.draw(controller.config,controller.currentTime);
       });
     }

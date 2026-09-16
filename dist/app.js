@@ -388,14 +388,14 @@ function createPitchEffects({ $, surface, batRig, phaseSurface = surface }) {
     const stage = surface.getBoundingClientRect();
     return { x: anchor.left - stage.left, y: anchor.top - stage.top };
   }
-  function hitDestination() {
+  function hitDestination(symbol) {
     const stage = surface.getBoundingClientRect(), pitcher = $('pitcher').getBoundingClientRect();
     const center = pitcher.left + pitcher.width / 2 - stage.left;
-    // Pick one direction per hit, independently of the selected pitch zone.
-    // Keep that destination throughout flight and finish above the screen.
+    // Choose once after contact; triple hits favor the deep left/right gaps.
+    const flight = batRig.hitProfile(symbol);
     const side = Math.random() < .5 ? -1 : 1;
-    const spread = side * (.06 + Math.random() * .28);
-    return { x: center + stage.width * spread, y: -stage.height * .01 };
+    const spread = side * (flight.spread + Math.random() * flight.spreadRange);
+    return { x: center + stage.width * spread, y: stage.height * flight.endY, flight };
   }
   function swingBat(target, lead, follow, miss, row, column, failureStyle) {
     return batRig.play(target, lead, follow, miss, row, column, failureStyle);
@@ -603,9 +603,9 @@ async function swing(i) {
   if (game.status !== 'playing' || !Number.isInteger(i) || i < 0 || i >= 25 || game.hits.has(i)) throw Error('This zone is unavailable.');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const quick = $('motion-mode').value === 'quick';
-  const timing = reduce ? { wind: 0, release: 0, flight: 0, follow: 0, hitFlight: 0, swingFollow: 0 } : quick
-    ? { wind: 320, release: 80, flight: 180, follow: 120, hitFlight: 420, swingFollow: 180 }
-    : { wind: 320, release: 80, flight: 360, follow: 120, hitFlight: 420, swingFollow: 180 };
+  const timing = reduce ? { wind: 0, release: 0, flight: 0, follow: 0, swingFollow: 0 } : quick
+    ? { wind: 320, release: 80, flight: 180, follow: 120, swingFollow: 180 }
+    : { wind: 320, release: 80, flight: 360, follow: 120, swingFollow: 180 };
   busy = true; render(); tiles[i].classList.add('targeted');
   surface.dataset.phase = 'windup'; message('Here comes the pitch…');
   const rect = tiles[i].getBoundingClientRect(), parent = stage.getBoundingClientRect();
@@ -632,8 +632,8 @@ async function swing(i) {
       if (!reduce) $('contact').animate([{ opacity: 1, transform: 'translate(-50%,-50%) scale(.35)' }, { opacity: 0, transform: 'translate(-50%,-50%) scale(1.65)' }], { duration: timing.follow, fill: 'none' });
       const symbol = MinesEngine.symbolById[game.snapshot().board[i]];
       message(`${symbol.label} · ×${(symbol.factor / 100).toFixed(2)} · Keep swinging or cash out.`, 'win');
-      const destination = hitDestination();
-      await animateBall(target, destination, timing.hitFlight, true, batAnimation);
+      const destination = hitDestination(selectedSymbol);
+      await animateBall(target, destination, reduce ? 0 : destination.flight.duration, true, batAnimation);
     } else {
       const glanced = failureStyle === 'glance';
       tone(glanced ? 'glance' : 'miss'); flash('OUT!', true, true); message('OUT! · Lost ' + money(game.bet) + ' CR', 'error');
