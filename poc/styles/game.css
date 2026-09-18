@@ -462,3 +462,14 @@ dialog li,dialog p{font-size:18px;line-height:1.5}
 .difficulty-odds .selected-odds{background:#15382d88;color:#b5f9d0}
 .difficulty-panel .difficulty-note{font-size:12px;line-height:1.4;color:#b8cbd8;margin:12px 0 0}
 @media(max-width:350px){.difficulty-panel{padding:14px}.difficulty-panel h2{font-size:18px}.difficulty-odds{font-size:12px}.choice-chance{font-size:22px}}
+
+/* Stadium surround behind the game; narrow phones retain their existing layout. */
+@media (min-width:541px){
+  body{isolation:isolate;background:#020b13}
+  body::before{
+    content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background-image:linear-gradient(180deg,rgba(2,11,19,.18),rgba(2,11,19,.28) 55%,rgba(2,11,19,.68)),url('assets/stadium-night-backdrop.webp');
+    background-size:cover;background-position:center center;background-repeat:no-repeat;
+  }
+  .game{box-shadow:0 12px 70px 20px #0009}
+}

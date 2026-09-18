@@ -88,3 +88,9 @@ The current bat geometry, swing timing, and ascending path in poc/src/game/fx/ba
 - HARD pitcher update (2026-09-17): the user supplied a red-uniform replacement at source-assets/images/pitcher-hard.png. Runtime and distribution copies preserve the provided 887 x 444 PNG bytes without further image processing.
 
 - Medium / Hard motion update (2026-09-17): the user supplied replacement sprite sheets with submarine / torso-coil deliveries. The current runtime copies preserve the supplied PNG bytes; integration performed no generation, resizing or recoloring.
+
+## Night stadium page backdrop (2026-09-18)
+
+- Generated for this project using the built-in OpenAI image generation tool at the user’s request.
+- Original: source-assets/images/stadium-night-backdrop.png. Web runtime: poc/assets/images/stadium-night-backdrop.webp (same dimensions, WebP encoded).
+- Prompt and integration notes: doc/night-stadium-backdrop.md. This new page surround does not replace the existing in-game stadium assets.

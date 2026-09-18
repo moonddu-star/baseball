@@ -5,7 +5,7 @@ const path = require('node:path');
 const defaultRoot = path.resolve(__dirname, '../dist');
 const mimeTypes = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png', '.svg': 'image/svg+xml', '.mp3': 'audio/mpeg', '.txt': 'text/plain; charset=utf-8' };
+  '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.mp3': 'audio/mpeg', '.txt': 'text/plain; charset=utf-8' };
 
 // Serves files only; this is not the PixiBrown LocalServer game protocol.
 function createStaticServer(root = defaultRoot) {
