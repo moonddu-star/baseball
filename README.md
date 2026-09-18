@@ -22,6 +22,8 @@ npm start
 
 ## ZIP 배포와 GitHub 빌드
 
+[웹에서 게임 실행](https://moonddu-star.github.io/baseball/) · master에 푸시하면 검사 통과 후 GitHub Pages에 자동 반영됩니다.
+
 Windows에서 `npm run release` 명령으로 빌드·검사·테스트와 ZIP 생성/압축 해제 검증을 한 번에 실행합니다. 결과는 releases/에 저장됩니다. GitHub Actions도 같은 명령을 사용하며, 소스를 푸시한 뒤 실행 결과에서 ZIP을 받을 수 있습니다.
 
 [GitHub 빌드·ZIP 배포 안내](doc/github-build.md) · [저장소](https://github.com/moonddu-star/baseball)

@@ -26,13 +26,24 @@ npm run release
 .github/workflows/build-zip.yml은 소스가 GitHub에 올라간 뒤 push, pull_request, 수동 실행에 반응합니다.
 
 1. 개발자 승인 후 필요한 프로젝트 파일과 워크플로를 커밋하고 origin에 푸시합니다.
-2. 저장소의 Actions → Build and verify ZIP에서 실행 결과를 확인합니다.
+2. 저장소의 Actions → Build ZIP and deploy Pages에서 실행 결과를 확인합니다.
 3. 성공한 실행의 Artifacts에서 clutch-hit-build-실행번호-재시도번호를 다운로드합니다.
 4. 내려받은 아티팩트 묶음을 풀면 실제 배포 ZIP과 ZIP 체크섬 파일이 있습니다. 배포 ZIP 안의 내용을 회사 테스트 서버에 업로드합니다.
 
 GitHub에서도 동일한 npm run release를 사용합니다. Windows 실행 환경과 Node.js 24를 지정했으며, 검증을 통과한 해당 실행의 ZIP만 아티팩트로 보관합니다(30일). 아티팩트의 수동 다운로드 방법은 [GitHub 공식 문서](https://docs.github.com/en/actions/managing-workflow-runs/downloading-workflow-artifacts)를 참고하세요.
 
-워크플로는 contents: read 권한으로 빌드 파일만 만듭니다. GitHub Release 게시나 GitHub Pages 배포는 구성하지 않았습니다. 웹 호스팅 자동 배포는 실제 테스트 서버의 배포 방식이 정해지면 별도로 연결합니다.
+## GitHub Pages 웹 배포
+
+게임 주소: https://moonddu-star.github.io/baseball/
+
+저장소 Settings → Pages → Build and deployment → Source를 GitHub Actions로 사용합니다.
+master 푸시 또는 master에서 수동 실행하면 검증된 ZIP과 동일한 파일을 Pages에 게시합니다. PR과 다른 브랜치는 빌드/ZIP 검사만 수행합니다.
+
+build 작업은 contents: read 권한으로 검사와 ZIP 생성을 합니다. deploy 작업에만 pages: write, id-token: write를 부여하고 github-pages 환경을 사용합니다. 업로드 대상은 압축 해제 검증을 통과한 폴더이므로 원본 저장소나 오래된 dist 에셋이 섞이지 않습니다.
+
+[GitHub Pages 공식 워크플로 문서](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)
+
+GitHub Release 게시 기능은 별도입니다. ZIP은 기존처럼 로컬 releases/와 Actions Artifacts에서 받습니다.
 
 ## 배포 내용 관리
 
