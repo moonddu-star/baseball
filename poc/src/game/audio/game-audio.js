@@ -199,5 +199,5 @@ function createGameAudio({ celebrationFiles = {} } = {}) {
   document.addEventListener('visibilitychange', () => { if (document.hidden) pauseAudio(); else if (unlocked && enabled) activate(); });
   window.addEventListener('pagehide', () => { pageActive = false; pauseAudio(); });
   window.addEventListener('pageshow', () => { pageActive = true; if (unlocked && enabled) activate(); });
-  return { tone, activate, stopEffects, setRoundActive, setEnabled, toggle: () => setEnabled(!enabled), get enabled() { return enabled; } };
+  return { ready: Promise.all(effectBytes), tone, activate, stopEffects, setRoundActive, setEnabled, toggle: () => setEnabled(!enabled), get enabled() { return enabled; } };
 }

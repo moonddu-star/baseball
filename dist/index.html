@@ -1,9 +1,27 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#061828"><meta name="description" content="Play the CLUTCH HIT baseball demo. Pick a zone, land hits, and cash out."><title>CLUTCH HIT</title><link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23061828'/%3E%3Cpath d='M20 5L9 18h8l-5 9 13-15h-9z' fill='%23ffce58'/%3E%3C/svg%3E"><link rel="preload" href="assets/baseball-hit-icon.png" as="image"><link rel="preload" href="assets/pitcher-sprites.png" as="image"><link rel="preload" href="assets/pitcher-medium.png" as="image"><link rel="preload" href="assets/pitcher-hard.png" as="image"><link rel="preload" href="assets/fonts/barlow-regular.ttf" as="font" type="font/ttf" crossorigin><link rel="preload" href="assets/fonts/barlow-extrabold.ttf" as="font" type="font/ttf" crossorigin><link rel="stylesheet" href="styles.css"></head>
-<body><svg class="lighting-filters" width="0" height="0" aria-hidden="true" focusable="false"><defs>
+<body class="boot-loading"><section id="loading-screen" class="loading-screen" aria-labelledby="loading-title" aria-busy="true">
+<div class="loading-card">
+<p class="loading-brand">CLUTCH <span>HIT</span></p>
+<p class="loading-eyebrow">YOUR TURN AT THE PLATE</p>
+<h1 id="loading-title" tabindex="-1">BUILD YOUR<br><span>HIT STREAK.</span></h1>
+<ol class="loading-tips">
+<li><span class="loading-step" aria-hidden="true">01</span><div><strong>PICK A ZONE</strong><p>Choose where to swing.</p></div></li>
+<li><span class="loading-step" aria-hidden="true">02</span><div><strong>LAND HITS. GROW YOUR REWARD.</strong><p>Singles to home runs boost your multiplier.</p></div></li>
+<li><span class="loading-step" aria-hidden="true">03</span><div><strong>KEEP SWINGING OR CASH OUT</strong><p>Take another chance or collect your reward.</p></div></li>
+</ol>
+<p class="loading-rule"><strong>2 STRIKES.</strong> One miss ends your round.</p>
+<div class="loading-progress-head"><span id="loading-status" role="status" aria-live="polite">GETTING THE FIELD READY</span><span id="loading-percent" aria-hidden="true">0%</span></div>
+<progress id="loading-progress" max="100" value="0" aria-label="Game loading progress">0%</progress>
+<button id="loading-retry" type="button" hidden>TRY AGAIN</button>
+<p class="loading-footnote">VIRTUAL CREDITS · PLAY FOR FUN</p>
+</div>
+</section>
+<noscript><p class="loading-noscript">Please enable JavaScript to play CLUTCH HIT.</p></noscript>
+<svg class="lighting-filters" width="0" height="0" aria-hidden="true" focusable="false"><defs>
 <filter id="pitcher-day-tone" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB"><feComponentTransfer><feFuncR type="linear" slope="1.06" intercept="0.006"/><feFuncG type="linear" slope="1.03" intercept="0.006"/><feFuncB type="linear" slope="0.97" intercept="0.004"/></feComponentTransfer></filter>
 <filter id="pitcher-night-tone" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB"><feComponentTransfer><feFuncR type="linear" slope="0.79" intercept="0.012"/><feFuncG type="linear" slope="0.84" intercept="0.014"/><feFuncB type="linear" slope="0.92" intercept="0.018"/></feComponentTransfer></filter>
-</defs></svg><main class="game" data-difficulty="easy" data-time-of-day="night" aria-label="CLUTCH HIT baseball mines game">
+</defs></svg><main inert aria-hidden="true" class="game" data-difficulty="easy" data-time-of-day="night" aria-label="CLUTCH HIT baseball mines game">
 <div class="game-stage">
 <div class="stadium" aria-hidden="true"></div><canvas id="pitcher-aura" class="pitcher-aura" aria-hidden="true"></canvas><div class="pitcher-shadow" aria-hidden="true"></div><div id="pitcher" class="pitcher" aria-hidden="true"><span id="pitcher-ghost" class="pitcher-ghost"></span><span id="release-point" class="release-point"></span></div><div class="shade" aria-hidden="true"></div>
 <header class="header"><div class="brand"><span class="brand-main">CLUTCH <span class="brand-accent">HIT</span></span><button id="reset" aria-label="Reset demo balance to 1,000 credits">RESET</button></div><div class="header-actions"><button id="history" class="icon-button" type="button" aria-label="Recent plays and heatmap" title="Recent plays"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 10a9 9 0 1 1 2 8M3 4v6h6M12 7v5l3 2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button id="help" class="icon-button" aria-label="How to play">?</button><button id="sound" class="icon-button" aria-label="Enable sound" aria-pressed="false">♪</button></div></header>
@@ -37,7 +55,7 @@
 <div class="history-list-heading"><h3>ROUND HISTORY</h3><span>Payout includes bet</span></div><ol id="history-rounds" class="history-rounds"></ol>
 <p class="history-note">Past results do not predict the next hit.<br>Selected zones only · This session · Resets on refresh</p>
 </dialog>
-</main><script src="tiger-balance.js"></script><script src="engine.js"></script><script src="vendor/three.js"></script><script src="swing3d.js"></script><script src="app.js"></script></body></html>
+</main><script src="loading.js"></script><script src="tiger-balance.js"></script><script src="engine.js"></script><script src="vendor/three.js"></script><script src="swing3d.js"></script><script src="app.js"></script></body></html>
 
 
 

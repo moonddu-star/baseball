@@ -206,7 +206,7 @@ function createGameAudio({ celebrationFiles = {} } = {}) {
   document.addEventListener('visibilitychange', () => { if (document.hidden) pauseAudio(); else if (unlocked && enabled) activate(); });
   window.addEventListener('pagehide', () => { pageActive = false; pauseAudio(); });
   window.addEventListener('pageshow', () => { pageActive = true; if (unlocked && enabled) activate(); });
-  return { tone, activate, stopEffects, setRoundActive, setEnabled, toggle: () => setEnabled(!enabled), get enabled() { return enabled; } };
+  return { ready: Promise.all(effectBytes), tone, activate, stopEffects, setRoundActive, setEnabled, toggle: () => setEnabled(!enabled), get enabled() { return enabled; } };
 }
 
 // Source: poc/src/game/ui/game-view.js
@@ -918,5 +918,14 @@ function resetRound() { try { game.reset(); roundNumber = 0; if ($('result').ope
 bindControls({ $, game, audio, render, message, prepareRound, startRound, cashOut, resetRound });
 render();
 registerModelContext({ $, game, isBusy: () => busy, startRound, swing, cashOut });
+
+window.dispatchEvent(new CustomEvent('clutch-hit:ready', { detail: { audioReady: audio.ready } }));
+// If the loader script itself was unavailable, keep a visible recovery action.
+if (!$('loading-screen').dataset.controller) {
+  $('loading-status').textContent = 'COULD NOT LOAD THE GAME. PLEASE TRY AGAIN.';
+  $('loading-screen').setAttribute('aria-busy', 'false');
+  $('loading-retry').hidden = false;
+  $('loading-retry').onclick = () => location.reload();
+}
 
 })();

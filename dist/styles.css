@@ -473,3 +473,33 @@ dialog li,dialog p{font-size:18px;line-height:1.5}
   }
   .game{box-shadow:0 12px 70px 20px #0009}
 }
+
+/* First-load explanation; the game cannot receive input until its assets are ready. */
+body.boot-loading{overflow:hidden}
+.boot-loading .game{visibility:hidden}
+.loading-screen{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;overflow-y:auto;padding:24px 20px;background:linear-gradient(145deg,#04101aec,#071e2ae8);color:#eff5fb}
+.loading-screen[hidden]{display:none}
+.loading-card{width:min(100%,460px);margin:auto}
+.loading-brand{margin:0 0 38px;font-size:24px;font-weight:800;letter-spacing:-.04em}
+.loading-brand span{color:#ffd061}
+.loading-eyebrow{margin:0 0 10px;color:#acbec9;font-size:12px;font-weight:600;letter-spacing:.16em}
+#loading-title{margin:0;font:800 clamp(38px,7vw,54px)/1.04 var(--font-ui);letter-spacing:-.045em;outline:none}
+#loading-title span{color:#ffd061}
+.loading-tips{display:grid;gap:20px;list-style:none;margin:32px 0 24px;padding:0}
+.loading-tips li{display:flex;align-items:flex-start;gap:14px}
+.loading-step{display:grid;place-items:center;width:32px;height:32px;flex:none;border:1px solid #60807766;border-radius:50%;font-size:13px;font-weight:700;color:#37e8a5;background:#15393144}
+.loading-tips strong{display:block;font-size:15px;line-height:1.25;font-weight:700}
+.loading-tips p{margin:5px 0 0;font-size:14px;line-height:1.4;color:#b6c9d5}
+.loading-rule{margin:0 0 34px;padding-top:18px;border-top:1px solid #809ba333;font-size:14px;line-height:1.5;color:#c4d2db}
+.loading-rule strong{color:#ffd061}
+.loading-progress-head{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px;font-size:11px;font-weight:600;letter-spacing:.055em;color:#a9c0ce}
+#loading-percent{flex:none;color:#ffd061;font-variant-numeric:tabular-nums}
+#loading-progress{display:block;appearance:none;width:100%;height:5px;border:0;border-radius:4px;overflow:hidden;background:#243e4c;color:#ffd061}
+#loading-progress::-webkit-progress-bar{background:#243e4c}
+#loading-progress::-webkit-progress-value{background:#ffd061}
+#loading-progress::-moz-progress-bar{background:#ffd061}
+#loading-retry{margin-top:18px;width:100%;min-height:48px;border:0;border-radius:8px;background:#ffd061;color:#061523;font-weight:700;font-size:16px}
+.loading-footnote{margin:16px 0 0;font-size:10px;letter-spacing:.12em;color:#8fa6b5;text-align:center}
+.loading-noscript{position:fixed;z-index:10001;bottom:20px;left:20px;right:20px;background:#061523;padding:20px;color:#fff;text-align:center}
+@media(max-height:720px){.loading-screen{padding:20px}.loading-brand{margin-bottom:22px}.loading-tips{gap:14px;margin:24px 0 18px}.loading-rule{margin-bottom:22px}}
+@media(max-width:350px){.loading-screen{padding:20px 16px}.loading-tips strong{font-size:14px}.loading-tips p{font-size:13px}.loading-brand{font-size:22px}}

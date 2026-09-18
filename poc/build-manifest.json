@@ -30,7 +30,8 @@
     "poc/assets/fonts/barlow-bold.ttf": "assets/fonts/barlow-bold.ttf",
     "poc/assets/fonts/barlow-extrabold.ttf": "assets/fonts/barlow-extrabold.ttf",
     "poc/assets/fonts/barlow-license.txt": "assets/fonts/barlow-license.txt",
-    "poc/assets/images/stadium-night-backdrop.webp": "assets/stadium-night-backdrop.webp"
+    "poc/assets/images/stadium-night-backdrop.webp": "assets/stadium-night-backdrop.webp",
+    "poc/src/game/ui/loading-screen.js": "loading.js"
   },
   "scripts": [
     "poc/src/game/shared/format.js",
