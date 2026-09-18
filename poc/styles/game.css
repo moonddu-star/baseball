@@ -395,8 +395,7 @@ dialog li,dialog p{font-size:18px;line-height:1.5}
 .struck-out .strike-dots i{background:#ffb5aa;border-color:#ffb5aa}
 .struck-out{color:#ffb5aa}
 .start-guide{position:absolute;inset:0;z-index:4;pointer-events:none;user-select:none}
-.ready-bat{position:absolute;left:-11%;top:56%;width:82%;height:auto;max-width:none;transform:rotate(-64deg);transform-origin:4% 50%;filter:drop-shadow(0 3px 3px #0008)}
-.start-goal{position:absolute;left:4%;right:4%;top:31%;text-align:center;color:#2ff9ad;font-family:var(--font-emphasis);text-shadow:0 2px 4px #03130e,0 0 18px #021d16}
+.start-goal{position:absolute;left:4%;right:4%;top:50%;transform:translateY(-50%);text-align:center;color:#2ff9ad;font-family:var(--font-emphasis);text-shadow:0 2px 4px #03130e,0 0 18px #021d16}
 .start-goal h1{margin:0;font-size:clamp(26px,7.2cqw,40px);font-weight:700;line-height:1.2;letter-spacing:-.025em}
 .start-goal h1 span{display:block}
 .start-goal p{margin:16px 0 0;font-size:clamp(16px,3.8cqw,21px);font-weight:700;line-height:1.35}
@@ -420,16 +419,6 @@ dialog li,dialog p{font-size:18px;line-height:1.5}
 .scoreboard .next{align-items:flex-end;justify-content:flex-start;text-align:right;padding:0}
 .scoreboard>div>span,.scoreboard strong,.next #hit-count{margin-inline:0}
 
-/* A quiet pre-pitch bat waggle, pivoting at the grip without changing its size. */
-@keyframes ready-bat-waggle{
-  0%,100%{transform:rotate(-64deg)}
-  32%{transform:rotate(-70deg)}
-  68%{transform:rotate(-61deg)}
-}
-@media(prefers-reduced-motion:no-preference){
-  .start-guide:not([hidden]) .ready-bat{animation:ready-bat-waggle 2.8s ease-in-out infinite;will-change:transform}
-}
-
 /* Hit streak is the primary right-side readout; odds remain a compact secondary line. */
 .scoreboard .next #hit-count{display:flex;align-items:baseline;justify-content:flex-end;gap:5px;margin:0;font-size:clamp(36px,12cqw,64.8px);font-weight:700;line-height:1.05;letter-spacing:-.035em;color:#fff;white-space:nowrap;font-variant-numeric:tabular-nums}
 #hit-count #streak-unit{font-size:.36em;font-weight:700;line-height:1;letter-spacing:.01em}
@@ -442,8 +431,9 @@ dialog li,dialog p{font-size:18px;line-height:1.5}
 .decision-hint{color:#8bf0b7;font-weight:700;letter-spacing:.01em}
 @keyframes third-strike{0%{transform:scale(.75);box-shadow:0 0 0 0 #ffb5aa99}55%{transform:scale(1.25);box-shadow:0 0 0 7px #ffb5aa22}100%{transform:scale(1);box-shadow:0 0 0 0 transparent}}
 @media(prefers-reduced-motion:no-preference){.game[data-phase='strike-three'] .strike-dots i:last-child{animation:third-strike .32s ease-out}}
-.difficulty-panel{width:min(94vw,520px);max-height:90dvh;overflow:auto;padding:20px;background:#061523;border-color:#304453}
-.difficulty-panel .dialog-head{gap:10px}.difficulty-panel h2{font-size:clamp(19px,5vw,26px);line-height:1.1}
+.difficulty-panel{width:min(94vw,520px);max-height:calc(100dvh - 32px);overflow:auto;padding:20px;background:#061523;border-color:#304453}
+/* Reserve a separate header row so the close control clears the pitcher cards. */
+.difficulty-panel .dialog-head{gap:12px;min-height:44px;margin-bottom:18px}.difficulty-panel h2{font-size:clamp(19px,5vw,26px);line-height:1.1}
 #close-difficulty{width:48px;height:48px;min-width:48px;display:grid;place-items:center;padding:0;color:white;background:#19374b;border:1px solid #7896ab}
 .difficulty-panel .difficulty-intro{font-size:14px;line-height:1.4;color:#b8cbd8;margin:12px 0}
 .pitcher-choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
@@ -477,29 +467,42 @@ dialog li,dialog p{font-size:18px;line-height:1.5}
 /* First-load explanation; the game cannot receive input until its assets are ready. */
 body.boot-loading{overflow:hidden}
 .boot-loading .game{visibility:hidden}
-.loading-screen{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;overflow-y:auto;padding:24px 20px;background:linear-gradient(145deg,#04101aec,#071e2ae8);color:#eff5fb}
+.loading-screen{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;overflow-y:auto;padding:24px 20px;background-color:#04101a;background-image:linear-gradient(180deg,rgba(2,11,19,.55),rgba(2,11,19,.70) 55%,rgba(2,11,19,.85)),url('assets/stadium-night-backdrop.webp');background-size:cover;background-position:center;background-repeat:no-repeat;color:#eff5fb}
 .loading-screen[hidden]{display:none}
 .loading-card{width:min(100%,460px);margin:auto}
 .loading-brand{margin:0 0 38px;font-size:24px;font-weight:800;letter-spacing:-.04em}
 .loading-brand span{color:#ffd061}
-.loading-eyebrow{margin:0 0 10px;color:#acbec9;font-size:12px;font-weight:600;letter-spacing:.16em}
 #loading-title{margin:0;font:800 clamp(38px,7vw,54px)/1.04 var(--font-ui);letter-spacing:-.045em;outline:none}
 #loading-title span{color:#ffd061}
 .loading-tips{display:grid;gap:20px;list-style:none;margin:32px 0 24px;padding:0}
-.loading-tips li{display:flex;align-items:flex-start;gap:14px}
+.loading-tips li{display:flex;align-items:center;gap:14px}
 .loading-step{display:grid;place-items:center;width:32px;height:32px;flex:none;border:1px solid #60807766;border-radius:50%;font-size:13px;font-weight:700;color:#37e8a5;background:#15393144}
-.loading-tips strong{display:block;font-size:15px;line-height:1.25;font-weight:700}
-.loading-tips p{margin:5px 0 0;font-size:14px;line-height:1.4;color:#b6c9d5}
+.loading-tips strong{display:block;font-size:16px;line-height:1.25;font-weight:700}
 .loading-rule{margin:0 0 34px;padding-top:18px;border-top:1px solid #809ba333;font-size:14px;line-height:1.5;color:#c4d2db}
 .loading-rule strong{color:#ffd061}
-.loading-progress-head{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px;font-size:11px;font-weight:600;letter-spacing:.055em;color:#a9c0ce}
+.loading-progress-head{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px;font-size:12px;font-weight:600;letter-spacing:.055em;color:#a9c0ce}
 #loading-percent{flex:none;color:#ffd061;font-variant-numeric:tabular-nums}
 #loading-progress{display:block;appearance:none;width:100%;height:5px;border:0;border-radius:4px;overflow:hidden;background:#243e4c;color:#ffd061}
 #loading-progress::-webkit-progress-bar{background:#243e4c}
 #loading-progress::-webkit-progress-value{background:#ffd061}
 #loading-progress::-moz-progress-bar{background:#ffd061}
 #loading-retry{margin-top:18px;width:100%;min-height:48px;border:0;border-radius:8px;background:#ffd061;color:#061523;font-weight:700;font-size:16px}
-.loading-footnote{margin:16px 0 0;font-size:10px;letter-spacing:.12em;color:#8fa6b5;text-align:center}
 .loading-noscript{position:fixed;z-index:10001;bottom:20px;left:20px;right:20px;background:#061523;padding:20px;color:#fff;text-align:center}
 @media(max-height:720px){.loading-screen{padding:20px}.loading-brand{margin-bottom:22px}.loading-tips{gap:14px;margin:24px 0 18px}.loading-rule{margin-bottom:22px}}
-@media(max-width:350px){.loading-screen{padding:20px 16px}.loading-tips strong{font-size:14px}.loading-tips p{font-size:13px}.loading-brand{font-size:22px}}
+@media(max-width:350px){.loading-screen{padding:20px 16px}.loading-tips strong{font-size:14px}.loading-brand{font-size:22px}}
+
+.rules-details{margin-top:18px}.rules-details summary{padding:12px 0;cursor:pointer;color:#ffd061;font-size:14px;font-weight:700}.rules-details[open] summary{margin-bottom:8px}
+
+/* Compact dialog close controls: approximately 80% of the previous 48px / 26px sizes. */
+#close-help,#close-result,#close-history,#close-difficulty{width:38px;height:38px;min-width:38px;min-height:38px;flex:0 0 38px}
+#close-help svg,#close-result svg,#close-history svg,#close-difficulty svg{width:21px;height:21px;display:block;pointer-events:none}
+.dialog-head,.history-head,.result-top{gap:12px}
+.dialog-head>:first-child,.history-head>:first-child,.result-top>:first-child{min-width:0}
+
+/* A soft green keyboard-light wave loops until the first round starts. */
+.board.zone-guide .tile::after{content:"";position:absolute;inset:0;border:1px solid #a9efc5;border-radius:inherit;background:linear-gradient(135deg,#95eab530,#51cf9012);box-shadow:inset 0 0 14px #83e8ae55;opacity:0;pointer-events:none}
+@keyframes zone-light-wave{0%,6%,58%,100%{opacity:0}24%{opacity:.9}38%{opacity:.45}}
+@media(prefers-reduced-motion:no-preference){
+  body:not(.boot-loading) .board.zone-guide .tile::after{animation:zone-light-wave 2.1s ease-in-out var(--zone-light-delay) infinite both}
+}
+@media(prefers-reduced-motion:reduce){.board.zone-guide .tile::after{opacity:.18}}

@@ -37,14 +37,14 @@ function prepareRound() {
   if (busy || game.status === 'playing') throw Error('Finish the current round first.');
   if ($('result').open) $('result').close();
   game.prepare();
-  clearEffects(); render(); message('Set your bet and step up to the plate.'); $('bet').focus({ preventScroll: true });
+  clearEffects(); render(); message('SET YOUR BET'); $('bet').focus({ preventScroll: true });
 }
 function startRound() {
   if (busy) throw Error('A swing is in progress. Please wait.');
   game.start(readBet(), game.difficulty);
   if ($('result').open) $('result').close();
   history.begin();
-  roundNumber++; clearEffects(); message('Pick a zone to swing.'); render(); return game.snapshot();
+  roundNumber++; clearEffects(); message('PICK A ZONE'); render(); return game.snapshot();
 }
 function cashOut() {
   if (busy) throw Error('A swing is in progress. Please wait.');
@@ -62,7 +62,7 @@ async function swing(i) {
     ? { wind: 320, release: 80, flight: 180, follow: 120, swingFollow: 180 }
     : { wind: 320, release: 80, flight: 360, follow: 120, swingFollow: 180 };
   busy = true; render(); tiles[i].classList.add('targeted');
-  surface.dataset.phase = 'windup'; message('Here comes the pitch…');
+  surface.dataset.phase = 'windup'; message('');
   const rect = tiles[i].getBoundingClientRect(), parent = stage.getBoundingClientRect();
   const target = { x: rect.left + rect.width / 2 - parent.left, y: rect.top + rect.height / 2 - parent.top };
   let batAnimation = null, rewardAnimation = Promise.resolve();
@@ -97,7 +97,7 @@ async function swing(i) {
       const destination = hitDestination(selectedSymbol);
       await animateBall(target, destination, reduce ? 0 : destination.flight.duration, true, batAnimation);
     } else {
-      tone('miss'); message('SWING AND MISS', 'error');
+      tone('miss'); message('', 'error');
       // Every OUT is a clean swing-and-miss: no contact flash or upward deflection.
       await animateBall(target, target, reduce ? 0 : 180, true, batAnimation);
     }
@@ -108,12 +108,12 @@ async function swing(i) {
       await pause(320);
       surface.dataset.phase = 'strikeout';
       flash('STRIKEOUT!', true, true);
-      message('STRIKE THREE · STREAK ENDED', 'error');
+      message('STREAK ENDED', 'error');
       await pause(OUT_RESULT_HOLD_MS);
     }
     busy = false; render(); surface.dataset.phase = 'idle';
     if (game.status === 'playing' && game.snapshot().hits.length === 1 && !decisionHintSeen) {
-      decisionHintSeen = true; message('KEEP SWINGING OR CASH OUT', 'win decision-hint');
+      decisionHintSeen = true; message('KEEP GOING OR CASH OUT', 'win decision-hint');
     }
     if (outcome === 'cleared') { message(money(game.lastPayout) + ' CR automatically cashed out', 'win'); tone('cash'); tone('win'); showResult(); }
     else if (outcome === 'out') showResult();
@@ -125,7 +125,7 @@ async function swing(i) {
     throw error;
   } finally { cancelRewards(); busy = false; clearEffects(); render(); }
 }
-function resetRound() { try { game.reset(); roundNumber = 0; if ($('result').open) $('result').close(); clearEffects(); render(); message('Balance reset to 1,000 CR.'); } catch (error) { message(error.message, 'error'); } }
+function resetRound() { try { game.reset(); roundNumber = 0; if ($('result').open) $('result').close(); clearEffects(); render(); message('BALANCE RESET'); } catch (error) { message(error.message, 'error'); } }
 bindControls({ $, game, audio, render, message, prepareRound, startRound, cashOut, resetRound });
 render();
 registerModelContext({ $, game, isBusy: () => busy, startRound, swing, cashOut });
@@ -133,8 +133,10 @@ registerModelContext({ $, game, isBusy: () => busy, startRound, swing, cashOut }
 window.dispatchEvent(new CustomEvent('clutch-hit:ready', { detail: { audioReady: audio.ready } }));
 // If the loader script itself was unavailable, keep a visible recovery action.
 if (!$('loading-screen').dataset.controller) {
-  $('loading-status').textContent = 'COULD NOT LOAD THE GAME. PLEASE TRY AGAIN.';
+  $('loading-status').textContent = 'LOAD FAILED. TRY AGAIN.';
   $('loading-screen').setAttribute('aria-busy', 'false');
-  $('loading-retry').hidden = false;
-  $('loading-retry').onclick = () => location.reload();
+  const retry = document.createElement('button');
+  retry.id = 'loading-retry'; retry.type = 'button'; retry.textContent = 'TRY AGAIN';
+  retry.onclick = () => location.reload();
+  $('loading-recovery').replaceChildren(retry);
 }

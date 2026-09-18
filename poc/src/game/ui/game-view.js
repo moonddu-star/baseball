@@ -7,6 +7,7 @@ function createGameView({ $, game, surface, isBusy, onSwing }) {
   for (let i = 0; i < 25; i++) {
     const tile = document.createElement('button');
     tile.className = 'tile';
+    tile.style.setProperty('--zone-light-delay', ((Math.floor(i / 5) + i % 5) * 70) + 'ms');
     tile.addEventListener('click', () => onSwing(i).catch(error => message(error.message, 'error')));
     tiles.push(tile); board.append(tile);
   }
@@ -81,12 +82,13 @@ function createGameView({ $, game, surface, isBusy, onSwing }) {
     $('reset').disabled = active || isBusy();
     $('round-tag').textContent = isBusy() ? 'PITCH INCOMING' : s.status.toUpperCase();
     board.classList.toggle('inactive', !active); surface.dataset.state = s.status;
-    // Consume the entire onboarding, including its bat, after the first valid round starts.
+    // Hide both onboarding cues once the first valid round starts.
     if (active && !goalSeen) {
       goalSeen = true;
     }
     $('start-guide').hidden = goalSeen || s.status !== 'ready';
     $('start-goal').hidden = goalSeen || s.status !== 'ready';
+    board.classList.toggle('zone-guide', !goalSeen && s.status === 'ready');
     const struckOut = s.status === 'out';
     $('strike-label').textContent = struckOut ? '3 STRIKES' : '2 STRIKES';
     $('strike-count').classList.toggle('struck-out', struckOut);
@@ -111,7 +113,7 @@ function createGameView({ $, game, surface, isBusy, onSwing }) {
     }
     $('action').disabled = isBusy() || (active && k === 0);
     $('action').setAttribute('aria-busy', String(isBusy())); board.setAttribute('aria-busy', String(isBusy()));
-    $('action-label').textContent = active ? isBusy() ? 'SWINGING' : 'CASH OUT' : finished ? 'PLAY AGAIN' : 'STEP UP TO THE PLATE';
+    $('action-label').textContent = active ? isBusy() ? 'SWINGING' : 'CASH OUT' : finished ? 'PLAY AGAIN' : 'START ROUND';
     let amount;
     if (active) amount = k ? money(rewardDisplay ? rewardDisplay.cashout : s.cashout) + ' CR' : 'PICK A ZONE';
     else { try { amount = money(readBet()) + ' CR'; } catch { amount = 'ENTER BET'; } }

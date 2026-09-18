@@ -1,6 +1,6 @@
 function createGameAudio({ celebrationFiles = {} } = {}) {
   const preferenceKey = 'strike-zone-sound-enabled';
-  const musicTracks = { intro: { url: 'assets/intro-bg.mp3', level: .15 }, game: { url: 'assets/baseball-bg.mp3', level: .16 } };
+  const musicTracks = { intro: { url: 'assets/intro-bg.mp3', level: .15 }, game: { url: 'assets/baseball-bg.mp3', level: .45 } };
   let musicMode = 'intro', musicLevel = musicTracks.intro.level;
   const effectFiles = { click: 'assets/sfx-click.mp3', hit: 'assets/sfx-hit.mp3', 'hit-single': 'assets/sfx-hit-single.mp3', 'hit-strong': 'assets/sfx-hit-strong.mp3', out: 'assets/sfx-out.mp3' };
   // Optional supplied recordings only: no missing-file requests or synthetic crowd placeholder.

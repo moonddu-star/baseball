@@ -3,6 +3,7 @@
 ## Player-facing behavior
 
 - On every page load, show a full-screen English introduction in the existing Barlow family.
+- Use the same night stadium image as the game surround on desktop and mobile, with a 55–85% dark navy overlay for readable instructions.
 - Explain zone selection, hit rewards, and keep swinging versus cashing out. State that two strikes means one miss ends the round.
 - Show real task completion progress; keep the explanation visible for at least 2.5 seconds, then enter the existing start guide automatically once ready.
 - The game is visually hidden and inert during loading. Release the input gate and move focus to the start action on completion.
@@ -12,9 +13,10 @@
 ## Readiness and recovery
 
 - Standalone loading.js starts before the engine and game scripts. game-main sends clutch-hit:ready only after initialization and control registration.
-- Wait for stadiums, pitcher sheets, bat, hit icon, four Barlow weights, and the already-running effect-audio downloads. Desktop also waits for the surrounding night stadium backdrop.
+- Wait for stadiums, pitcher sheets, hit icon, four Barlow weights, and the already-running effect-audio downloads. All viewport sizes also wait for the shared night stadium backdrop used by the loading screen.
 - The percentage counts finished preparation tasks, not downloaded bytes. Music streaming and audio decoding remain managed by the existing audio engine on user interaction.
 - Audio failures or an eight-second audio wait may complete without recorded effects, preserving the existing audio fallback behavior.
+- TRY AGAIN is absent from the initial markup and is created only on failure; retry reloads the page.
 - Essential image/font/script failures keep the game gated and expose TRY AGAIN. Twenty-five seconds without readiness also exposes retry.
 - If loading.js itself fails to load, successfully initialized game-main exposes the retry action.
 - Scrolling is confined to the overlay when the browser is too short for the instructions. Focus is moved to retry on failure.
@@ -26,3 +28,7 @@
 - Delayed required image keeps the game gated beyond the minimum display time.
 - Missing required image, app.js, or loading.js shows retry; restoring the resource and retrying succeeds.
 - Missing effect recordings do not leave the game stuck loading.
+
+## Copy simplification
+
+The loader keeps three short action lines and the two-strike failure condition. Supporting paragraphs, eyebrow and promotional footer are removed. The start guide keeps its goal only; main status messages use SET YOUR BET / PICK A ZONE / KEEP GOING OR CASH OUT. Full rules and odds remain available in an expandable section of HOW TO PLAY.

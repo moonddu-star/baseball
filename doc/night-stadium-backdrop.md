@@ -3,9 +3,9 @@
 Generated on 2026-09-18 using the built-in image_gen tool, at the user’s request.
 
 - Original: source-assets/images/stadium-night-backdrop.png (1672 × 941).
-- Runtime: poc/assets/images/stadium-night-backdrop.webp, WebP quality 82; same dimensions.
+- Runtime: poc/assets/images/stadium-night-backdrop.webp, optimized WebP (59,890 bytes); same dimensions.
 - Placement: fixed full-viewport background behind the centered game, at viewport widths above 540 CSS px. The existing in-game day/night stadium and all UI positions remain unchanged.
-- A navy overlay reduces the surround brightness; narrow phones do not download the backdrop.
+- A navy overlay reduces the surround brightness. The loading screen also reuses this image with a stronger navy overlay on all screen sizes; narrow phones therefore download it for loading, while their gameplay layout remains unchanged.
 - Included by the build manifest in static ZIPs and Pages deployments.
 
 ## Final generation prompt
