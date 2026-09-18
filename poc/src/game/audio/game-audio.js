@@ -1,8 +1,10 @@
-function createGameAudio() {
+function createGameAudio({ celebrationFiles = {} } = {}) {
   const preferenceKey = 'strike-zone-sound-enabled';
   const musicTracks = { intro: { url: 'assets/intro-bg.mp3', level: .15 }, game: { url: 'assets/baseball-bg.mp3', level: .16 } };
   let musicMode = 'intro', musicLevel = musicTracks.intro.level;
-  const effectFiles = { click: 'assets/sfx-click.mp3', hit: 'assets/sfx-hit.mp3', out: 'assets/sfx-out.mp3' };
+  const effectFiles = { click: 'assets/sfx-click.mp3', hit: 'assets/sfx-hit.mp3', 'hit-single': 'assets/sfx-hit-single.mp3', 'hit-strong': 'assets/sfx-hit-strong.mp3', out: 'assets/sfx-out.mp3' };
+  // Optional supplied recordings only: no missing-file requests or synthetic crowd placeholder.
+  for (const kind of ['extra-base', 'home-run', 'win']) if (celebrationFiles[kind]) effectFiles[kind] = celebrationFiles[kind];
   const effectBuffers = new Map();
   // Fetch ahead of the first gesture, but only create the audio context on interaction.
   const effectBytes = Object.entries(effectFiles).map(([kind, url]) =>
@@ -16,7 +18,7 @@ function createGameAudio() {
     }).catch(() => {});
   }
   let enabled = true, unlocked = false, context = null, master = null, musicGain = null, effectsGain = null, hitInput = null;
-  let music = null, noiseBuffer = null, pageActive = true;
+  let music = null, noiseBuffer = null, pageActive = true, celebrationVoice = null;
   const voices = new Set(), lastPlayed = new Map();
   try { enabled = localStorage.getItem(preferenceKey) !== 'false'; } catch {}
 
@@ -57,7 +59,7 @@ function createGameAudio() {
   }
   function stopEffects() {
     for (const voice of voices) { try { voice.stop(); } catch {} }
-    voices.clear(); lastPlayed.clear();
+    voices.clear(); lastPlayed.clear(); celebrationVoice = null;
   }
   function pauseAudio() {
     stopEffects();
@@ -84,6 +86,7 @@ function createGameAudio() {
   function setRoundActive(active) {
     const next = active ? 'game' : 'intro';
     if (next === musicMode) return;
+    stopCelebration();
     musicMode = next; musicLevel = musicTracks[next].level;
     if (!music) return;
     // A single media element ensures menu and round music never overlap.
@@ -95,9 +98,36 @@ function createGameAudio() {
     if (!buffer) return false;
     const source = context.createBufferSource(), gain = context.createGain();
     source.buffer = buffer; gain.gain.value = volume;
-    source.connect(gain); gain.connect(kind === 'hit' ? hitInput : effectsGain); track(source, [gain]);
+    source.connect(gain); gain.connect(['hit', 'hit-single', 'hit-strong'].includes(kind) ? hitInput : effectsGain); track(source, [gain]);
+    source.effectGain = gain;
     source.start(context.currentTime, offset);
-    return true;
+    return source;
+  }
+  function stopCelebration(fade = 0) {
+    if (!celebrationVoice) return;
+    const source = celebrationVoice; celebrationVoice = null;
+    try {
+      if (fade && context && source.effectGain) {
+        const now = context.currentTime, gain = source.effectGain.gain;
+        gain.cancelScheduledValues(now); gain.setValueAtTime(gain.value, now);
+        gain.linearRampToValueAtTime(0, now + fade); source.stop(now + fade);
+      } else source.stop();
+    } catch {}
+  }
+  function celebrate(kind, streak = 1, symbol) {
+    if (!effectBuffers.has(kind)) return; // Do not queue a cheer for a late-loading file.
+    if (celebrationVoice && voices.has(celebrationVoice)) {
+      // Cash-out preserves the hit cheer; a new hit takes over with a short fade.
+      if (kind === 'win') return;
+      stopCelebration(.08);
+    }
+    const tier = Math.max(0, Math.min(3, Math.floor(Number.isFinite(streak) ? streak : 1) - 1));
+    const levels = kind === 'extra-base' && symbol === 'triple' ? [1, 1.05, 1.10, 1.15] : [.55, .60, .65, .70];
+    const volume = kind === 'win' ? .55 : levels[tier];
+    const source = sample(kind, volume);
+    if (!source) return;
+    celebrationVoice = source;
+    duck(.4, Math.min(source.buffer.duration, 4));
   }
   function duck(ratio, hold) {
     const now = context.currentTime, gain = musicGain.gain;
@@ -127,17 +157,21 @@ function createGameAudio() {
   function outCue(delay = 0) {
     note(310, 250, .14, .085, delay, 'triangle'); note(230, 170, .20, .075, delay + .11, 'triangle');
   }
-  function tone(kind) {
+  function tone(kind, detail) {
     if (!enabled || !unlocked || !context || document.hidden || context.state === 'closed' || !pageActive) return;
     const now = context.currentTime, gap = kind === 'click' ? .04 : .08;
     if (now - (lastPlayed.get(kind) ?? -Infinity) < gap) return;
     lastPlayed.set(kind, now);
+    if (kind === 'miss' || kind === 'out' || kind === 'glance') stopCelebration(.08);
     if (kind === 'click') {
       if (!sample('click', .35)) note(760, 440, .055, .055, 0, 'triangle');
     } else if (kind === 'pitch') {
       noise(.14, .075, 800, 1700, 0, .035);
     } else if (kind === 'hit') {
-      const recordedHit = sample('hit', 1, .07);
+      const hitSample = detail === 'single' ? 'hit-single' : detail === 'double' ? 'hit-strong' : 'hit';
+      // Home runs use the strongest impact gain; the shared compressor/limiter remains active.
+      const impactGain = detail === 'home-run' ? 2 : 1;
+      const recordedHit = sample(hitSample, impactGain, .07);
       // Keep a short contact body audible even on small speakers or when the sample is unavailable.
       noise(.065, recordedHit ? .12 : .20, 2600, 1600, 0, .003, hitInput);
       note(660, 520, .16, recordedHit ? .14 : .18, 0, 'triangle', hitInput);
@@ -149,6 +183,8 @@ function createGameAudio() {
       noise(.13, .08, 1700, 600, 0, .035); if (!sample('out', .35, .015)) outCue(.10); duck(.65, 1.1);
     } else if (kind === 'out') {
       if (!sample('out', .35, .015)) outCue(); duck(.65, 1.1);
+    } else if (kind === 'extra-base' || kind === 'home-run' || kind === 'win') {
+      celebrate(kind, detail?.streak, detail?.symbol);
     } else if (kind === 'cash') {
       [523.25, 659.25, 783.99, 1046.5].forEach((frequency, i) => note(frequency, frequency, .23, .075, i * .075, 'triangle'));
       duck(.7, .4);

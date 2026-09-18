@@ -8,6 +8,7 @@
     "start": "node server.cjs",
     "dev": "node server.cjs",
     "check": "node tools/check-project.cjs",
-    "test": "node --test tests/*.test.cjs"
+    "test": "node --test tests/*.test.cjs",
+    "release": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/package-release.ps1"
   }
 }

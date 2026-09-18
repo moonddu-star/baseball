@@ -118,7 +118,7 @@ test('each hit type keeps contact, distinct depth and arc, and completes its own
         const track={toUV:{x:destination.x/r.width,y:destination.y/r.height},profile:destination.flight,start:g.lead,duration:profile.duration,hitBack:true,resolve:()=>{}};
         assert.ok(Math.abs(destination.x-r.width*.5)>=r.width*profile.spread-1e-6);
         assert.ok(r.sampleBall(g,g.lead,track).position.distanceTo(g.point)<1e-10,'ball jumps at contact');
-        if(kind==='double'||kind==='triple'){
+        if(kind==='double'||kind==='triple'||kind==='home-run'){
           assert.equal(profile.duration,420,'line drive must retain original 420ms timing');
           const end=r.sampleBall(g,g.lead+profile.duration,track).position;
           for(const u of [.1,.25,.5,.75]){

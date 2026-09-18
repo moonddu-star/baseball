@@ -26,13 +26,6 @@ function bindControls({ $, game, audio, render, message, prepareRound, startRoun
   });
   $('action').addEventListener('click', () => { try { if (game.status === 'playing') cashOut(); else startRound(); } catch (error) { message(error.message, 'error'); } });
   $('bet').addEventListener('input', () => { if (game.status !== 'playing') render(); });
-  $('difficulty').addEventListener('click', () => {
-    if ($('difficulty').disabled || game.status === 'playing') return;
-    if (game.status !== 'ready') prepareRound();
-    const levels = MinesEngine.balance.difficulties;
-    game.setDifficulty(levels[(levels.indexOf(game.difficulty) + 1) % levels.length]);
-    render();
-  });
   $('reset').addEventListener('click', resetRound);
   $('prepare-next').addEventListener('click', prepareRound);
   $('close-result').addEventListener('click', () => $('result').close());

@@ -5,11 +5,13 @@ const money = cents => (cents / 100).toLocaleString('en-US', { minimumFractionDi
 const multiple = value => value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '×';
 
 // Source: poc/src/game/audio/game-audio.js
-function createGameAudio() {
+function createGameAudio({ celebrationFiles = {} } = {}) {
   const preferenceKey = 'strike-zone-sound-enabled';
   const musicTracks = { intro: { url: 'assets/intro-bg.mp3', level: .15 }, game: { url: 'assets/baseball-bg.mp3', level: .16 } };
   let musicMode = 'intro', musicLevel = musicTracks.intro.level;
-  const effectFiles = { click: 'assets/sfx-click.mp3', hit: 'assets/sfx-hit.mp3', out: 'assets/sfx-out.mp3' };
+  const effectFiles = { click: 'assets/sfx-click.mp3', hit: 'assets/sfx-hit.mp3', 'hit-single': 'assets/sfx-hit-single.mp3', 'hit-strong': 'assets/sfx-hit-strong.mp3', out: 'assets/sfx-out.mp3' };
+  // Optional supplied recordings only: no missing-file requests or synthetic crowd placeholder.
+  for (const kind of ['extra-base', 'home-run', 'win']) if (celebrationFiles[kind]) effectFiles[kind] = celebrationFiles[kind];
   const effectBuffers = new Map();
   // Fetch ahead of the first gesture, but only create the audio context on interaction.
   const effectBytes = Object.entries(effectFiles).map(([kind, url]) =>
@@ -23,7 +25,7 @@ function createGameAudio() {
     }).catch(() => {});
   }
   let enabled = true, unlocked = false, context = null, master = null, musicGain = null, effectsGain = null, hitInput = null;
-  let music = null, noiseBuffer = null, pageActive = true;
+  let music = null, noiseBuffer = null, pageActive = true, celebrationVoice = null;
   const voices = new Set(), lastPlayed = new Map();
   try { enabled = localStorage.getItem(preferenceKey) !== 'false'; } catch {}
 
@@ -64,7 +66,7 @@ function createGameAudio() {
   }
   function stopEffects() {
     for (const voice of voices) { try { voice.stop(); } catch {} }
-    voices.clear(); lastPlayed.clear();
+    voices.clear(); lastPlayed.clear(); celebrationVoice = null;
   }
   function pauseAudio() {
     stopEffects();
@@ -91,6 +93,7 @@ function createGameAudio() {
   function setRoundActive(active) {
     const next = active ? 'game' : 'intro';
     if (next === musicMode) return;
+    stopCelebration();
     musicMode = next; musicLevel = musicTracks[next].level;
     if (!music) return;
     // A single media element ensures menu and round music never overlap.
@@ -102,9 +105,36 @@ function createGameAudio() {
     if (!buffer) return false;
     const source = context.createBufferSource(), gain = context.createGain();
     source.buffer = buffer; gain.gain.value = volume;
-    source.connect(gain); gain.connect(kind === 'hit' ? hitInput : effectsGain); track(source, [gain]);
+    source.connect(gain); gain.connect(['hit', 'hit-single', 'hit-strong'].includes(kind) ? hitInput : effectsGain); track(source, [gain]);
+    source.effectGain = gain;
     source.start(context.currentTime, offset);
-    return true;
+    return source;
+  }
+  function stopCelebration(fade = 0) {
+    if (!celebrationVoice) return;
+    const source = celebrationVoice; celebrationVoice = null;
+    try {
+      if (fade && context && source.effectGain) {
+        const now = context.currentTime, gain = source.effectGain.gain;
+        gain.cancelScheduledValues(now); gain.setValueAtTime(gain.value, now);
+        gain.linearRampToValueAtTime(0, now + fade); source.stop(now + fade);
+      } else source.stop();
+    } catch {}
+  }
+  function celebrate(kind, streak = 1, symbol) {
+    if (!effectBuffers.has(kind)) return; // Do not queue a cheer for a late-loading file.
+    if (celebrationVoice && voices.has(celebrationVoice)) {
+      // Cash-out preserves the hit cheer; a new hit takes over with a short fade.
+      if (kind === 'win') return;
+      stopCelebration(.08);
+    }
+    const tier = Math.max(0, Math.min(3, Math.floor(Number.isFinite(streak) ? streak : 1) - 1));
+    const levels = kind === 'extra-base' && symbol === 'triple' ? [1, 1.05, 1.10, 1.15] : [.55, .60, .65, .70];
+    const volume = kind === 'win' ? .55 : levels[tier];
+    const source = sample(kind, volume);
+    if (!source) return;
+    celebrationVoice = source;
+    duck(.4, Math.min(source.buffer.duration, 4));
   }
   function duck(ratio, hold) {
     const now = context.currentTime, gain = musicGain.gain;
@@ -134,17 +164,21 @@ function createGameAudio() {
   function outCue(delay = 0) {
     note(310, 250, .14, .085, delay, 'triangle'); note(230, 170, .20, .075, delay + .11, 'triangle');
   }
-  function tone(kind) {
+  function tone(kind, detail) {
     if (!enabled || !unlocked || !context || document.hidden || context.state === 'closed' || !pageActive) return;
     const now = context.currentTime, gap = kind === 'click' ? .04 : .08;
     if (now - (lastPlayed.get(kind) ?? -Infinity) < gap) return;
     lastPlayed.set(kind, now);
+    if (kind === 'miss' || kind === 'out' || kind === 'glance') stopCelebration(.08);
     if (kind === 'click') {
       if (!sample('click', .35)) note(760, 440, .055, .055, 0, 'triangle');
     } else if (kind === 'pitch') {
       noise(.14, .075, 800, 1700, 0, .035);
     } else if (kind === 'hit') {
-      const recordedHit = sample('hit', 1, .07);
+      const hitSample = detail === 'single' ? 'hit-single' : detail === 'double' ? 'hit-strong' : 'hit';
+      // Home runs use the strongest impact gain; the shared compressor/limiter remains active.
+      const impactGain = detail === 'home-run' ? 2 : 1;
+      const recordedHit = sample(hitSample, impactGain, .07);
       // Keep a short contact body audible even on small speakers or when the sample is unavailable.
       noise(.065, recordedHit ? .12 : .20, 2600, 1600, 0, .003, hitInput);
       note(660, 520, .16, recordedHit ? .14 : .18, 0, 'triangle', hitInput);
@@ -156,6 +190,8 @@ function createGameAudio() {
       noise(.13, .08, 1700, 600, 0, .035); if (!sample('out', .35, .015)) outCue(.10); duck(.65, 1.1);
     } else if (kind === 'out') {
       if (!sample('out', .35, .015)) outCue(); duck(.65, 1.1);
+    } else if (kind === 'extra-base' || kind === 'home-run' || kind === 'win') {
+      celebrate(kind, detail?.streak, detail?.symbol);
     } else if (kind === 'cash') {
       [523.25, 659.25, 783.99, 1046.5].forEach((frequency, i) => note(frequency, frequency, .23, .075, i * .075, 'triangle'));
       duck(.7, .4);
@@ -176,6 +212,10 @@ function createGameAudio() {
 // Source: poc/src/game/ui/game-view.js
 function createGameView({ $, game, surface, isBusy, onSwing }) {
   const board = $('board'), tiles = [], symbols = MinesEngine.symbolById;
+  // Show onboarding once per page load, including after refresh.
+  let goalSeen = false;
+  let rewardDisplay = null, rewardFrame = 0, finishReward = null;
+
   for (let i = 0; i < 25; i++) {
     const tile = document.createElement('button');
     tile.className = 'tile';
@@ -196,24 +236,73 @@ function createGameView({ $, game, surface, isBusy, onSwing }) {
     const preferred = Math.min(max, available / Math.max(el.textContent.length, 1));
     el.style.fontSize = `clamp(18px, ${preferred}cqw, ${max * 5.4}px)`;
   }
+  function paintRewards(multiplier, cashout) {
+    $('multiplier').innerHTML = multiple(multiplier).replace('×', '<span>×</span>');
+    $('now-payout').textContent = money(cashout);
+    $('action-amount').textContent = money(cashout) + ' CR';
+    fitNumber($('multiplier'), 12, 60); fitNumber($('now-payout'), 6, 40);
+  }
+  function cancelRewards() {
+    cancelAnimationFrame(rewardFrame); rewardFrame = 0; rewardDisplay = null;
+    ['multiplier', 'now-payout', 'action-amount'].forEach(id => $(id).classList.remove('reward-counting'));
+    if (finishReward) { const done = finishReward; finishReward = null; done(); }
+  }
+  function holdRewards(before) {
+    cancelRewards();
+    rewardDisplay = { multiplier: before.displayMultiplier, cashout: before.hits.length ? before.cashout : before.bet };
+  }
+  function animateRewards(after) {
+    const from = rewardDisplay || { multiplier: after.displayMultiplier, cashout: after.cashout };
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      cancelRewards(); paintRewards(after.displayMultiplier, after.cashout); return Promise.resolve();
+    }
+    ['multiplier', 'now-payout', 'action-amount'].forEach(id => $(id).classList.add('reward-counting'));
+    const start = performance.now() + 120;
+    return new Promise(resolve => {
+      finishReward = resolve;
+      function tick(now) {
+        const progress = Math.min(1, Math.max(0, (now - start) / 480));
+        const eased = 1 - Math.pow(1 - progress, 3);
+        rewardDisplay = {
+          multiplier: progress === 1 ? after.displayMultiplier : Math.floor((from.multiplier + (after.displayMultiplier - from.multiplier) * eased) * 100) / 100,
+          cashout: progress === 1 ? after.cashout : Math.floor(from.cashout + (after.cashout - from.cashout) * eased)
+        };
+        paintRewards(rewardDisplay.multiplier, rewardDisplay.cashout);
+        if (progress === 1) { cancelRewards(); return; }
+        rewardFrame = requestAnimationFrame(tick);
+      }
+      rewardFrame = requestAnimationFrame(tick);
+    });
+  }
   function render() {
-    const s = game.snapshot(), active = s.status === 'playing';
+    const s = game.snapshot(), active = s.status === 'playing' || (s.status === 'cleared' && isBusy());
     const finished = ['out', 'cashed', 'cleared'].includes(s.status), k = s.hits.length;
     $('balance').innerHTML = money(s.balance) + ' <small>CR</small>';
-    $('multiplier').innerHTML = multiple(s.displayMultiplier).replace('×', '<span>×</span>');
+    $('multiplier').innerHTML = multiple(rewardDisplay ? rewardDisplay.multiplier : s.displayMultiplier).replace('×', '<span>×</span>');
     $('next').textContent = Math.round(s.successProbability * 100) + '%';
-    $('hit-count').textContent = k + (k === 1 ? ' HIT' : ' HITS');
-    fitNumber($('multiplier'), 12, 60); fitNumber($('next'), 12, 60);
+    $('streak-value').textContent = k;
+    $('streak-unit').textContent = k === 1 ? 'HIT' : 'HITS';
+    $('hit-count').setAttribute('aria-label', k + ' consecutive ' + (k === 1 ? 'hit' : 'hits'));
+    fitNumber($('multiplier'), 12, 60);
     $('bet').disabled = active || isBusy(); $('difficulty').disabled = active || isBusy();
     $('difficulty-value').textContent = s.difficulty.toUpperCase();
     $('difficulty').dataset.difficulty = s.difficulty;
     surface.dataset.difficulty = s.difficulty;
     $('pitcher').dataset.difficulty = s.difficulty;
-    const nextDifficulty = MinesEngine.balance.difficulties[(MinesEngine.balance.difficulties.indexOf(s.difficulty) + 1) % 3];
-    $('difficulty').setAttribute('aria-label', `Difficulty: ${s.difficulty}. ${active ? 'Locked during this round.' : `Change to ${nextDifficulty}.`}`);
+    $('difficulty').setAttribute('aria-label', `Difficulty: ${s.difficulty}. ${active ? 'Locked during this round.' : 'Compare pitchers and probabilities.'}`);
     $('reset').disabled = active || isBusy();
     $('round-tag').textContent = isBusy() ? 'PITCH INCOMING' : s.status.toUpperCase();
     board.classList.toggle('inactive', !active); surface.dataset.state = s.status;
+    // Consume the entire onboarding, including its bat, after the first valid round starts.
+    if (active && !goalSeen) {
+      goalSeen = true;
+    }
+    $('start-guide').hidden = goalSeen || s.status !== 'ready';
+    $('start-goal').hidden = goalSeen || s.status !== 'ready';
+    const struckOut = s.status === 'out';
+    $('strike-label').textContent = struckOut ? '3 STRIKES' : '2 STRIKES';
+    $('strike-count').classList.toggle('struck-out', struckOut);
+    $('strike-count').setAttribute('aria-label', struckOut ? 'Three strikes. Round over.' : 'Two strikes. A miss ends the round.');
     tiles.forEach((tile, i) => {
       const symbol = s.board[i], played = game.hits.has(i), out = symbol === 'out';
       tile.className = 'tile' + (symbol ? out ? ' out' : ' hit' : '') + (finished && !played && i !== game.triggered ? ' revealed-preview' : '') + (game.triggered === i ? ' triggered' : '');
@@ -227,7 +316,7 @@ function createGameView({ $, game, surface, isBusy, onSwing }) {
     });
     document.querySelector('.settings').hidden = active; $('comparison').hidden = !active;
     if (active) {
-      $('now-payout').textContent = k ? money(s.cashout) : '—';
+      $('now-payout').textContent = k ? money(rewardDisplay ? rewardDisplay.cashout : s.cashout) : '—';
       $('next-payout').textContent = '1.05–5×';
       $('round-difficulty-value').textContent = s.difficulty.toUpperCase();
       fitNumber($('now-payout'), 6, 40); fitNumber($('next-payout'), 6, 40);
@@ -236,17 +325,162 @@ function createGameView({ $, game, surface, isBusy, onSwing }) {
     $('action').setAttribute('aria-busy', String(isBusy())); board.setAttribute('aria-busy', String(isBusy()));
     $('action-label').textContent = active ? isBusy() ? 'SWINGING' : 'CASH OUT' : finished ? 'PLAY AGAIN' : 'STEP UP TO THE PLATE';
     let amount;
-    if (active) amount = k ? money(s.cashout) + ' CR' : 'PICK A ZONE';
+    if (active) amount = k ? money(rewardDisplay ? rewardDisplay.cashout : s.cashout) + ' CR' : 'PICK A ZONE';
     else { try { amount = money(readBet()) + ' CR'; } catch { amount = 'ENTER BET'; } }
     $('action-amount').textContent = amount;
     $('probability').textContent = `${s.difficulty.toUpperCase()} · ${active ? `Bet ${money(s.bet)} CR` : finished ? 'Round complete' : `Hit chance ${Math.round(s.successProbability * 100)}%`}`;
-    $('remaining').textContent = finished ? `Played ${s.playedCells}/25` : `Hidden zones ${s.remainingCells}`;
-    $('target-rtp').textContent = `RTP ${Math.round(s.rtp * 100)}%`;
     $('odds-caption').textContent = `${s.difficulty.toUpperCase()} · RTP ${Math.round(s.rtp * 100)}%`;
     const first = MinesEngine.balance.initial[s.rtpVersion][s.difficulty], later = MinesEngine.balance.secondary[s.difficulty];
     $('symbol-odds').innerHTML = MinesEngine.balance.symbols.map((symbol, index) => `<tr><th scope="row">${symbol.label}</th><td>×${(symbol.factor / 100).toFixed(2)}</td><td>${(first[index] / 100).toFixed(2)}%</td><td>${(later[index] / 100).toFixed(2)}%</td></tr>`).join('');
   }
-  return { board, tiles, message, readBet, render };
+  return { board, tiles, message, readBet, render, holdRewards, animateRewards, cancelRewards };
+}
+
+// Source: poc/src/game/ui/difficulty-panel.js
+function createDifficultyPanel({ $, game, render: renderGame, prepareRound }) {
+  const panel = $('difficulty-panel'), balance = MinesEngine.balance;
+  let phase = 'first';
+  const sheets = { easy: 'pitcher-sprites.png', medium: 'pitcher-medium.png', hard: 'pitcher-hard.png' };
+  const forms = { easy: 'OVERHAND', medium: 'SUBMARINE', hard: 'TWIST DELIVERY' };
+  const cards = balance.difficulties.map(level => {
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'pitcher-choice';
+    button.dataset.difficulty = level;
+    button.innerHTML = '<span class="choice-portrait" aria-hidden="true"></span><strong>' + level.toUpperCase() + '</strong><span class="choice-form">' + forms[level] + '</span><span class="choice-chance"></span><small>HIT CHANCE</small>';
+    button.querySelector('.choice-portrait').style.backgroundImage = 'url(assets/' + sheets[level] + ')';
+    button.addEventListener('click', () => {
+      if (game.status === 'playing') return;
+      game.setDifficulty(level); renderGame(); refresh();
+    });
+    $('pitcher-choices').append(button); return button;
+  });
+  function refresh() {
+    const snapshot = game.snapshot(), first = balance.initial[snapshot.rtpVersion];
+    const table = phase === 'first' ? first : balance.secondary;
+    cards.forEach(button => {
+      const level = button.dataset.difficulty;
+      button.setAttribute('aria-pressed', String(level === snapshot.difficulty));
+      button.querySelector('.choice-chance').textContent = ((10000 - table[level][0]) / 100).toFixed(0) + '%';
+    });
+    panel.querySelectorAll('[data-odds-phase]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.oddsPhase === phase)));
+    $('difficulty-odds-caption').textContent = (phase === 'first' ? 'FIRST PITCH' : 'LATER PITCHES') + ' · RESULT CHANCE';
+    $('difficulty-odds').innerHTML = balance.symbols.map((symbol, index) => '<tr><th scope="row">' + symbol.label + (symbol.factor ? '<small>×' + (symbol.factor / 100).toFixed(2) + '</small>' : '') + '</th>' + balance.difficulties.map(level => '<td' + (level === snapshot.difficulty ? ' class="selected-odds"' : '') + '>' + (table[level][index] / 100).toFixed(2) + '%</td>').join('') + '</tr>').join('');
+    $('choose-pitcher').textContent = 'USE ' + snapshot.difficulty.toUpperCase() + ' PITCHER';
+  }
+  $('difficulty').addEventListener('click', () => {
+    if ($('difficulty').disabled || game.status === 'playing') return;
+    if (game.status !== 'ready') prepareRound();
+    phase = 'first'; refresh(); panel.showModal(); panel.scrollTop = 0;
+  });
+  panel.querySelectorAll('[data-odds-phase]').forEach(button => button.addEventListener('click', () => { phase = button.dataset.oddsPhase; refresh(); }));
+  $('close-difficulty').addEventListener('click', () => panel.close());
+  $('choose-pitcher').addEventListener('click', () => panel.close());
+  panel.addEventListener('click', event => {
+    if (event.target !== panel) return;
+    const rect = panel.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) panel.close();
+  });
+}
+
+// Source: poc/src/game/ui/play-history.js
+// Session-only history. Revealed, unplayed board cells never enter this store.
+function createPlayHistory() {
+  let sequence = 0, current = null;
+  const rounds = [];
+  function begin() { current = { id: ++sequence }; }
+  function sync(snapshot, triggered) {
+    if (!current || snapshot.status === 'ready') return;
+    const indexes = [...snapshot.hits];
+    if (Number.isInteger(triggered)) indexes.push(triggered);
+    if (!indexes.length) return;
+    Object.assign(current, {
+      difficulty: snapshot.difficulty, status: snapshot.status, bet: snapshot.bet,
+      multiplier: snapshot.displayMultiplier, payout: snapshot.cashout,
+      plays: indexes.map(index => ({ index, symbol: snapshot.board[index] }))
+    });
+    if (!rounds.includes(current)) rounds.push(current);
+    const matching = rounds.filter(round => round.difficulty === current.difficulty);
+    for (const expired of matching.slice(0, -30)) rounds.splice(rounds.indexOf(expired), 1);
+  }
+  function read(difficulty) {
+    const selected = rounds.filter(round => round.difficulty === difficulty);
+    const cells = Array.from({ length: 25 }, () => ({ total: 0, counts: { single: 0, double: 0, triple: 0, 'home-run': 0, out: 0 } }));
+    for (const round of selected) for (const play of round.plays) {
+      cells[play.index].total++;
+      cells[play.index].counts[play.symbol]++;
+    }
+    const last = selected.at(-1)?.plays.at(-1)?.index ?? null;
+    return { cells, latest: last, rounds: selected.slice().reverse().map(round => ({ ...round, plays: round.plays.map(play => ({ ...play })) })) };
+  }
+  return { begin, sync, read };
+}
+if (typeof module === 'object' && module.exports) module.exports = { createPlayHistory };
+
+// Source: poc/src/game/ui/history-panel.js
+function createHistoryPanel({ $, history, getDifficulty }) {
+  const dialog = $('history-panel'), grid = $('history-grid');
+  let difficulty = getDifficulty(), selected = null;
+  const labels = { single: '1B', double: '2B', triple: '3B', 'home-run': 'HR', out: 'OUT' };
+  const buttons = Array.from({ length: 25 }, (_, index) => {
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'heat-cell';
+    button.addEventListener('click', () => { selected = index; render(); });
+    grid.append(button); return button;
+  });
+  function render() {
+    const data = history.read(difficulty), max = Math.max(1, ...data.cells.map(cell => cell.total));
+    const plays = data.cells.reduce((sum, cell) => sum + cell.total, 0);
+    $('history-scope').textContent = `${difficulty.toUpperCase()} · ${data.rounds.length} / 30 RECENT ROUNDS`;
+    $('history-total').textContent = `${plays} ${plays === 1 ? 'SELECTION' : 'SELECTIONS'}`;
+    document.querySelectorAll('[data-history-difficulty]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.historyDifficulty === difficulty)));
+    buttons.forEach((button, index) => {
+      const cell = data.cells[index], strength = cell.total / max;
+      button.style.setProperty('--heat', cell.total ? .16 + strength * .68 : 0);
+      button.classList.toggle('has-plays', cell.total > 0);
+      button.classList.toggle('latest', data.latest === index);
+      button.textContent = cell.total || '·';
+      button.setAttribute('aria-pressed', String(selected === index));
+      button.setAttribute('aria-label', `Row ${Math.floor(index / 5) + 1}, column ${index % 5 + 1}: ${cell.total} selections${data.latest === index ? ', latest selection' : ''}`);
+    });
+    const cell = selected === null ? null : data.cells[selected];
+    $('history-zone').textContent = cell ? `ROW ${Math.floor(selected / 5) + 1} · COL ${selected % 5 + 1}` : 'TAP A ZONE';
+    $('history-zone-total').textContent = cell ? `${cell.total} ${cell.total === 1 ? 'selection' : 'selections'}` : 'View result counts';
+    $('history-counts').replaceChildren(...Object.entries(labels).map(([symbol, label]) => {
+      const item = document.createElement('div'); item.dataset.symbol = symbol;
+      const name = document.createElement('span'); name.textContent = label;
+      const count = document.createElement('strong'); count.textContent = cell ? cell.counts[symbol] : '—';
+      item.append(name, count); return item;
+    }));
+    $('history-empty').hidden = plays > 0;
+    $('history-rounds').replaceChildren(...data.rounds.map(round => {
+      const row = document.createElement('li'); row.className = 'history-round';
+      const heading = document.createElement('div'); heading.className = 'history-round-heading';
+      const title = document.createElement('strong'); title.textContent = `ROUND ${String(round.id).padStart(2, '0')}`;
+      const state = document.createElement('span'); state.textContent = { playing: 'IN PLAY', out: 'OUT', cashed: 'CASHED OUT', cleared: 'AUTO CASH OUT' }[round.status];
+      heading.append(title, state);
+      const results = document.createElement('div'); results.className = 'history-symbols';
+      for (const play of round.plays) {
+        const badge = document.createElement('span'); badge.dataset.symbol = play.symbol; badge.textContent = labels[play.symbol];
+        badge.title = `Row ${Math.floor(play.index / 5) + 1}, column ${play.index % 5 + 1}`; results.append(badge);
+      }
+      const detail = document.createElement('div'); detail.className = 'history-round-detail';
+      const multiplier = document.createElement('span'); multiplier.textContent = multiple(round.multiplier);
+      const payout = document.createElement('span'); payout.textContent = `${round.status === 'playing' ? 'CASH OUT NOW' : 'PAYOUT'} ${money(round.payout)} CR`;
+      detail.append(multiplier, payout); row.append(heading, results, detail); return row;
+    }));
+  }
+  $('history').addEventListener('click', () => {
+    difficulty = getDifficulty(); selected = history.read(difficulty).latest;
+    render(); dialog.showModal(); dialog.scrollTop = 0;
+  });
+  $('close-history').addEventListener('click', () => dialog.close());
+  document.querySelectorAll('[data-history-difficulty]').forEach(button => button.addEventListener('click', () => {
+    difficulty = button.dataset.historyDifficulty; selected = history.read(difficulty).latest; render();
+  }));
+  dialog.addEventListener('click', event => {
+    if (event.target !== dialog) return;
+    const r = dialog.getBoundingClientRect();
+    if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) dialog.close();
+  });
 }
 
 // Source: poc/src/game/ui/result-panel.js
@@ -256,7 +490,7 @@ function createResultPanel({ $, game, getRoundNumber }) {
     $('result').classList.toggle('loss', lost);
     $('result-round').textContent = String(getRoundNumber()).padStart(2, '0');
     const clearedTitle = s.completionReason === 'threshold' ? 'AUTO CASH OUT' : 'ALL ZONES CLEARED';
-    $('result-kind').textContent = lost ? 'OUT · ROUND OVER' : s.status === 'cleared' ? clearedTitle : 'CASHED OUT';
+    $('result-kind').textContent = lost ? 'STRIKE THREE · STREAK ENDED' : s.status === 'cleared' ? clearedTitle : 'CASHED OUT';
     $('result-title').textContent = lost ? 'ROUND OVER' : s.status === 'cleared' ? clearedTitle : 'CASHED OUT';
     $('result-hits').textContent = s.hits.length + (s.hits.length === 1 ? ' HIT' : ' HITS');
     $('result-multiplier').textContent = multiple(s.displayMultiplier);
@@ -298,13 +532,6 @@ function bindControls({ $, game, audio, render, message, prepareRound, startRoun
   });
   $('action').addEventListener('click', () => { try { if (game.status === 'playing') cashOut(); else startRound(); } catch (error) { message(error.message, 'error'); } });
   $('bet').addEventListener('input', () => { if (game.status !== 'playing') render(); });
-  $('difficulty').addEventListener('click', () => {
-    if ($('difficulty').disabled || game.status === 'playing') return;
-    if (game.status !== 'ready') prepareRound();
-    const levels = MinesEngine.balance.difficulties;
-    game.setDifficulty(levels[(levels.indexOf(game.difficulty) + 1) % levels.length]);
-    render();
-  });
   $('reset').addEventListener('click', resetRound);
   $('prepare-next').addEventListener('click', prepareRound);
   $('close-result').addEventListener('click', () => $('result').close());
@@ -565,19 +792,35 @@ const game = new MinesEngine.MinesGame();
 const surface = document.querySelector('.game');
 // Keep the calibrated 9:16 field separate from the responsive controls below it.
 const stage = document.querySelector('.game-stage');
-let busy = false, roundNumber = 0;
+let busy = false, roundNumber = 0, decisionHintSeen = false;
 const batRig = new BaseballSwing($('bat'), stage);
 const pitcherAura = createPitcherAura({ canvas: $('pitcher-aura'), surface: stage });
-const audio = createGameAudio();
+// Supplied extra-base / home-run cheers; a separate cash-out cheer remains optional.
+const audio = createGameAudio({ celebrationFiles: { 'extra-base': 'assets/sfx-cheer-normal.mp3', 'home-run': 'assets/sfx-cheer-strong.mp3', win: null } });
 const { tone } = audio;
-const { tiles, message, readBet, render: renderView } = createGameView({ $, game, surface, isBusy: () => busy, onSwing: i => swing(i) });
+const { tiles, message, readBet, render: renderView, holdRewards, animateRewards, cancelRewards } = createGameView({ $, game, surface, isBusy: () => busy, onSwing: i => swing(i) });
+const history = createPlayHistory();
+createHistoryPanel({ $, history, getDifficulty: () => game.difficulty });
+createDifficultyPanel({ $, game, render, prepareRound });
 const { showResult } = createResultPanel({ $, game, getRoundNumber: () => roundNumber });
 const { flash, clearEffects, windPitch, followPitch, releasePoint, hitDestination, swingBat, animateBall } = createPitchEffects({ $, surface: stage, batRig, phaseSurface: surface });
 function render() {
   renderView();
+  history.sync(game.snapshot(), game.triggered);
+  $('history').disabled = busy;
   audio.setRoundActive(game.status !== 'ready');
   const earned = ['playing', 'cashed', 'cleared'].includes(game.status) ? game.snapshot().multiplier : 0;
   pitcherAura.setMultiplier(earned);
+}
+function extraBaseHitStreak(snapshot) {
+  // Count committed selections in play order, not slot order or audible events.
+  // A single breaks the chain; each new round has an empty hit history.
+  let streak = 0;
+  for (let i = snapshot.hits.length - 1; i >= 0; i--) {
+    if (!['double', 'triple', 'home-run'].includes(snapshot.board[snapshot.hits[i]])) break;
+    streak++;
+  }
+  return streak;
 }
 function prepareRound() {
   if (busy || game.status === 'playing') throw Error('Finish the current round first.');
@@ -589,12 +832,13 @@ function startRound() {
   if (busy) throw Error('A swing is in progress. Please wait.');
   game.start(readBet(), game.difficulty);
   if ($('result').open) $('result').close();
+  history.begin();
   roundNumber++; clearEffects(); message('Pick a zone to swing.'); render(); return game.snapshot();
 }
 function cashOut() {
   if (busy) throw Error('A swing is in progress. Please wait.');
   const value = game.cashout(); render(); clearEffects();
-  message(`Cashed out ${money(value)} CR`, 'win'); tone('cash'); showResult(); return game.snapshot();
+  message(`Cashed out ${money(value)} CR`, 'win'); tone('cash'); if (value > game.bet) tone('win'); showResult(); return game.snapshot();
 }
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const OUT_RESULT_HOLD_MS = 1200;
@@ -610,13 +854,12 @@ async function swing(i) {
   surface.dataset.phase = 'windup'; message('Here comes the pitch…');
   const rect = tiles[i].getBoundingClientRect(), parent = stage.getBoundingClientRect();
   const target = { x: rect.left + rect.width / 2 - parent.left, y: rect.top + rect.height / 2 - parent.top };
-  let batAnimation = null;
+  let batAnimation = null, rewardAnimation = Promise.resolve();
   try {
     const selectedSymbol = game.reserve(i);
     const failed = selectedSymbol === 'out';
-    const failureStyle = failed && Math.random() < .5 ? 'glance' : 'miss';
     await windPitch(timing.wind, timing.release);
-    batAnimation = swingBat(target, timing.flight, timing.swingFollow, failed, Math.floor(i / 5), i % 5, failureStyle);
+    batAnimation = swingBat(target, timing.flight, timing.swingFollow, failed, Math.floor(i / 5), i % 5, 'miss');
     const origin = releasePoint();
     $('pitch').dataset.fromX = origin.x; $('pitch').dataset.fromY = origin.y;
     $('pitch').dataset.toX = target.x; $('pitch').dataset.toY = target.y;
@@ -624,29 +867,44 @@ async function swing(i) {
     const flight = animateBall(origin, target, timing.flight, false, batAnimation);
     const pitcherFinish = followPitch(timing.flight);
     await flight;
-    const outcome = game.reveal(i); render(); surface.dataset.phase = 'contact';
+    const beforeHit = game.snapshot();
+    const outcome = game.reveal(i);
+    if (outcome !== 'out') { holdRewards(beforeHit); render(); }
+    surface.dataset.phase = 'contact';
     $('contact').style.left = target.x + 'px'; $('contact').style.top = target.y + 'px';
     if (outcome !== 'out') {
-      const hitCallouts = { single: 'Single', double: 'Double', triple: 'Triple', 'home-run': 'Home Run!' };
-      tiles[i].classList.add('new-hit'); tone('hit'); flash(hitCallouts[game.snapshot().board[i]]);
-      if (!reduce) $('contact').animate([{ opacity: 1, transform: 'translate(-50%,-50%) scale(.35)' }, { opacity: 0, transform: 'translate(-50%,-50%) scale(1.65)' }], { duration: timing.follow, fill: 'none' });
+      const hitCallouts = { single: 'SINGLE', double: 'DOUBLE', triple: 'TRIPLE', 'home-run': 'HOME RUN!' };
+      tiles[i].classList.add('new-hit'); tone('hit', selectedSymbol);
+      const cheer = { streak: extraBaseHitStreak(game.snapshot()), symbol: selectedSymbol };
+      if (selectedSymbol === 'home-run') tone('home-run', cheer);
+      else if (selectedSymbol === 'double' || selectedSymbol === 'triple') tone('extra-base', cheer);
       const symbol = MinesEngine.symbolById[game.snapshot().board[i]];
-      message(`${symbol.label} · ×${(symbol.factor / 100).toFixed(2)} · Keep swinging or cash out.`, 'win');
+      flash(hitCallouts[game.snapshot().board[i]]);
+      rewardAnimation = animateRewards(game.snapshot());
+      if (!reduce) $('contact').animate([{ opacity: 1, transform: 'translate(-50%,-50%) scale(.35)' }, { opacity: 0, transform: 'translate(-50%,-50%) scale(1.65)' }], { duration: timing.follow, fill: 'none' });
+      message(`${symbol.label} · ×${(symbol.factor / 100).toFixed(2)}`, 'win');
       const destination = hitDestination(selectedSymbol);
       await animateBall(target, destination, reduce ? 0 : destination.flight.duration, true, batAnimation);
     } else {
-      const glanced = failureStyle === 'glance';
-      tone(glanced ? 'glance' : 'miss'); flash('OUT!', true, true); message('OUT! · Lost ' + money(game.bet) + ' CR', 'error');
-      if (glanced && !reduce) $('contact').animate([{ opacity: .65, transform: 'translate(-50%,-50%) scale(.2)' }, { opacity: 0, transform: 'translate(-50%,-50%) scale(.65)' }], { duration: 100, fill: 'none' });
-      await animateBall(target, target, reduce ? 0 : glanced ? 360 : 180, true, batAnimation);
+      tone('miss'); message('SWING AND MISS', 'error');
+      // Every OUT is a clean swing-and-miss: no contact flash or upward deflection.
+      await animateBall(target, target, reduce ? 0 : 180, true, batAnimation);
     }
-    await Promise.all([pitcherFinish, batAnimation?.finished.catch(() => {})]);
+    await Promise.all([pitcherFinish, batAnimation?.finished.catch(() => {}), rewardAnimation]);
     if (outcome === 'out') {
-      surface.dataset.phase = 'out-hold';
+      surface.dataset.phase = 'strike-three'; render();
+      message('STRIKE THREE', 'error');
+      await pause(320);
+      surface.dataset.phase = 'strikeout';
+      flash('STRIKEOUT!', true, true);
+      message('STRIKE THREE · STREAK ENDED', 'error');
       await pause(OUT_RESULT_HOLD_MS);
     }
     busy = false; render(); surface.dataset.phase = 'idle';
-    if (outcome === 'cleared') { message(money(game.lastPayout) + ' CR automatically cashed out', 'win'); tone('cash'); showResult(); }
+    if (game.status === 'playing' && game.snapshot().hits.length === 1 && !decisionHintSeen) {
+      decisionHintSeen = true; message('KEEP SWINGING OR CASH OUT', 'win decision-hint');
+    }
+    if (outcome === 'cleared') { message(money(game.lastPayout) + ' CR automatically cashed out', 'win'); tone('cash'); tone('win'); showResult(); }
     else if (outcome === 'out') showResult();
     return game.snapshot();
   } catch (error) {
@@ -654,7 +912,7 @@ async function swing(i) {
     if (game.status === 'playing' && game.snapshot().board[i] === null) game.reveal(i);
     if (game.status === 'out' || game.status === 'cleared') showResult();
     throw error;
-  } finally { busy = false; clearEffects(); render(); }
+  } finally { cancelRewards(); busy = false; clearEffects(); render(); }
 }
 function resetRound() { try { game.reset(); roundNumber = 0; if ($('result').open) $('result').close(); clearEffects(); render(); message('Balance reset to 1,000 CR.'); } catch (error) { message(error.message, 'error'); } }
 bindControls({ $, game, audio, render, message, prepareRound, startRound, cashOut, resetRound });

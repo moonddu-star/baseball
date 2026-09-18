@@ -1,5 +1,10 @@
 # 현재 프로젝트 구조
 
+## 현재 작업 범위 — 2026-09-17 최신 결정
+
+템플릿 시작 조건이 준비될 때까지 **현재 HTML·JavaScript POC 개발과 ZIP 배포에 집중한다.** 같은 날의 UI 전면 전환 지시는 사용자의 최신 결정으로 보류되었다. POC UI는 현재 방식으로 수정·검증하며, `doc/skills`는 향후 PixiBrown 이식 기준으로 유지한다. 현재 POC를 SKILLS 준수 구현으로 표시하지 않는다. 작업 규칙은 루트 `AGENTS.md`에 기록했다.
+
+
 ## 적용 범위
 
 2026-09-15 정리. 현재 실행물은 **HTML·JavaScript POC v12.2**다. PixiBrown 템플릿 포크는 아직 없으며, SceneMaker에서 열 수 있는 prefab 프로젝트로 변환된 상태가 아니다.

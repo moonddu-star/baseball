@@ -2,3 +2,7 @@ node_modules/
 .work/
 *.log
 
+
+# Generated deployment packages (kept locally; CI uploads artifacts)
+releases/*.zip
+releases/*.zip.sha256

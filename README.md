@@ -1,4 +1,9 @@
-# STRIKE ZONE · Stadium Live
+# CLUTCH HIT · Baseball POC
+
+## 현재 작업 범위 — 2026-09-17 최신 결정
+
+템플릿 시작 조건이 준비될 때까지 **현재 HTML·JavaScript POC 개발과 ZIP 배포에 집중한다.** 같은 날의 UI 전면 전환 지시는 사용자의 최신 결정으로 보류되었다. POC UI는 현재 방식으로 수정·검증하며, `doc/skills`는 향후 PixiBrown 이식 기준으로 유지한다. 현재 POC를 SKILLS 준수 구현으로 표시하지 않는다. 작업 규칙은 루트 `AGENTS.md`에 기록했다.
+
 
 야구 타격존으로 표현한 Mines POC v12.2입니다. **현재는 HTML·JavaScript POC**이며, `doc/skills`가 전제하는 PixiBrown/SceneMaker 템플릿으로의 이식은 아직 진행하지 않았습니다.
 
@@ -13,7 +18,13 @@ npm start
 
 [로컬 데모](http://127.0.0.1:4173/) · 기존 `node server.cjs` 명령도 동작합니다. 시작 시 원본을 자동 빌드합니다. 서버가 이미 켜져 있으면 `npm run build` 후 브라우저를 새로고침하세요.
 
-오프라인 실행은 `npm run build` 후 `dist/index.html`을 여세요. `poc/index.html`은 빌드 입력이므로 직접 열지 않습니다.
+로컬에서는 `npm start`로 접속하세요. 배포 시에는 `dist/`를 HTTP/HTTPS 정적 서버로 제공합니다. 파일을 직접 여는 `file://` 방식은 사운드 로딩이 제한될 수 있습니다. `poc/index.html`은 빌드 입력입니다.
+
+## ZIP 배포와 GitHub 빌드
+
+Windows에서 `npm run release` 명령으로 빌드·검사·테스트와 ZIP 생성/압축 해제 검증을 한 번에 실행합니다. 결과는 releases/에 저장됩니다. GitHub Actions도 같은 명령을 사용하며, 소스를 푸시한 뒤 실행 결과에서 ZIP을 받을 수 있습니다.
+
+[GitHub 빌드·ZIP 배포 안내](doc/github-build.md) · [저장소](https://github.com/moonddu-star/baseball)
 
 ## 어디를 수정하나요?
 

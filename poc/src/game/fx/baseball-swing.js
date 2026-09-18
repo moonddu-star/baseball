@@ -8,10 +8,10 @@
   // Presentation distances and heights are calibrated to the fixed stadium camera.
   // They describe the awarded symbol, not a physics simulation of baseball scoring.
   const HIT_FLIGHTS = Object.freeze({
-    single: Object.freeze({ duration: 620, depth: 26, arc: .08, endY: .295, spread: .24, spreadRange: .12, exitsTop: false }),
+    single: Object.freeze({ duration: 500, depth: 26, arc: .40, endY: .295, spread: .24, spreadRange: .12, exitsTop: false }),
     double: Object.freeze({ duration: 420, linear: true, depth: 38, arc: 0, endY: -.01, spread: .27, spreadRange: .12, exitsTop: true }),
     triple: Object.freeze({ duration: 420, linear: true, depth: 52, arc: 0, endY: -.01, spread: .27, spreadRange: .12, exitsTop: true }),
-    'home-run': Object.freeze({ duration: 1150, depth: 64, arc: .25, endY: -.035, spread: .10, spreadRange: .22, exitsTop: true })
+    'home-run': Object.freeze({ duration: 420, linear: true, depth: 64, arc: 0, endY: -.01, spread: .27, spreadRange: .12, exitsTop: true })
   });
   class BaseballSwing {
     hitProfile(symbol = 'single') { return HIT_FLIGHTS[symbol] || HIT_FLIGHTS.single; }
@@ -245,7 +245,7 @@
       else {from=this.onPlane({x:track.fromUV.x*this.width,y:track.fromUV.y*this.height},-16);to=g.point;}
       // Compensate for the very close batting camera: retain readable near-field travel
       // instead of compressing almost the entire visible path into the first few frames.
-      // Doubles/triples use the original immediate, constant-speed line drive.
+      // Extra-base hits use the original immediate, constant-speed line drive.
       const u=profile&&!profile.linear?t/(1+profile.depth/5*(1-t)):t;
       const position=from.clone().lerp(to,u);
       // Lift is zero at contact and arrival, preserving exact bat/ball contact.

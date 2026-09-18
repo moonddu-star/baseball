@@ -4,7 +4,7 @@ function createResultPanel({ $, game, getRoundNumber }) {
     $('result').classList.toggle('loss', lost);
     $('result-round').textContent = String(getRoundNumber()).padStart(2, '0');
     const clearedTitle = s.completionReason === 'threshold' ? 'AUTO CASH OUT' : 'ALL ZONES CLEARED';
-    $('result-kind').textContent = lost ? 'OUT · ROUND OVER' : s.status === 'cleared' ? clearedTitle : 'CASHED OUT';
+    $('result-kind').textContent = lost ? 'STRIKE THREE · STREAK ENDED' : s.status === 'cleared' ? clearedTitle : 'CASHED OUT';
     $('result-title').textContent = lost ? 'ROUND OVER' : s.status === 'cleared' ? clearedTitle : 'CASHED OUT';
     $('result-hits').textContent = s.hits.length + (s.hits.length === 1 ? ' HIT' : ' HITS');
     $('result-multiplier').textContent = multiple(s.displayMultiplier);
