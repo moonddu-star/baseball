@@ -56,9 +56,9 @@ const OUT_RESULT_HOLD_MS = 1200;
 async function swing(i) {
   if (busy) throw Error('A swing is in progress. Please wait.');
   if (game.status !== 'playing' || !Number.isInteger(i) || i < 0 || i >= 25 || game.hits.has(i)) throw Error('This zone is unavailable.');
-  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Core gameplay motion always runs; only the in-game speed selector changes timing.
   const quick = $('motion-mode').value === 'quick';
-  const timing = reduce ? { wind: 0, release: 0, flight: 0, follow: 0, swingFollow: 0 } : quick
+  const timing = quick
     ? { wind: 320, release: 80, flight: 180, follow: 120, swingFollow: 180 }
     : { wind: 320, release: 80, flight: 360, follow: 120, swingFollow: 180 };
   busy = true; render(); tiles[i].classList.add('targeted');
@@ -92,14 +92,14 @@ async function swing(i) {
       const symbol = MinesEngine.symbolById[game.snapshot().board[i]];
       flash(hitCallouts[game.snapshot().board[i]]);
       rewardAnimation = animateRewards(game.snapshot());
-      if (!reduce) $('contact').animate([{ opacity: 1, transform: 'translate(-50%,-50%) scale(.35)' }, { opacity: 0, transform: 'translate(-50%,-50%) scale(1.65)' }], { duration: timing.follow, fill: 'none' });
+      $('contact').animate([{ opacity: 1, transform: 'translate(-50%,-50%) scale(.35)' }, { opacity: 0, transform: 'translate(-50%,-50%) scale(1.65)' }], { duration: timing.follow, fill: 'none' });
       message(`${symbol.label} · ×${(symbol.factor / 100).toFixed(2)}`, 'win');
       const destination = hitDestination(selectedSymbol);
-      await animateBall(target, destination, reduce ? 0 : destination.flight.duration, true, batAnimation);
+      await animateBall(target, destination, destination.flight.duration, true, batAnimation);
     } else {
       tone('miss'); message('', 'error');
       // Every OUT is a clean swing-and-miss: no contact flash or upward deflection.
-      await animateBall(target, target, reduce ? 0 : 180, true, batAnimation);
+      await animateBall(target, target, 180, true, batAnimation);
     }
     await Promise.all([pitcherFinish, batAnimation?.finished.catch(() => {}), rewardAnimation]);
     if (outcome === 'out') {

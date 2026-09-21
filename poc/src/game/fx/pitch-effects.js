@@ -18,7 +18,7 @@ function createPitchEffects({ $, surface, batRig, phaseSurface = surface }) {
     actor.dataset.frame = String(frame);
     ghost.getAnimations().forEach(a => a.cancel());
     ghost.style.opacity = '0';
-    if (blend && previous !== frame && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (blend && previous !== frame) {
       ghost.style.backgroundPosition = (previous / 3 * 100) + '% center';
       ghost.animate([{ opacity: .8 }, { opacity: 0 }], { duration: blendDuration, easing: 'ease-out' });
     }
