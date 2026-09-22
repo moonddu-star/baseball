@@ -37,6 +37,7 @@
     "poc/src/game/shared/format.js",
     "poc/src/game/audio/game-audio.js",
     "poc/src/game/ui/game-view.js",
+    "poc/src/game/ui/bat-aim-guide.js",
     "poc/src/game/ui/difficulty-panel.js",
     "poc/src/game/ui/play-history.js",
     "poc/src/game/ui/history-panel.js",

@@ -506,3 +506,11 @@ body.boot-loading{overflow:hidden}
   body:not(.boot-loading) .board.zone-guide .tile::after{animation:zone-light-wave 2.1s ease-in-out var(--zone-light-delay) infinite both}
 }
 @media(prefers-reduced-motion:reduce){.board.zone-guide .tile::after{opacity:.18}}
+
+/* Contact preview: decorative, never intercepts zone input or predicts results. */
+.bat-aim-guide{position:absolute;inset:0;width:100%;height:100%;z-index:6;pointer-events:none;overflow:hidden;filter:drop-shadow(0 1px 2px #07190980)}
+.bat-aim-guide[hidden]{display:none}
+#bat-aim-outline{fill:#d6ee8620;stroke:#e0ef9ac9;stroke-width:1.35;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.aim-ring{fill:none;stroke:#e7f6a4b3;stroke-width:1;vector-effect:non-scaling-stroke}
+.aim-dot{fill:#edffb0}
+.board .tile.aimed:not(:disabled){border-color:#e0ef9ab3;background:#d6ee8610}

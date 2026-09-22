@@ -118,6 +118,7 @@
         }
       }
       points.push(new T.Vector2(0,.782));
+      this.outlineProfile=points.map(point=>({x:point.y,radius:point.x}));
       const wood=this.mesh(new T.LatheGeometry(points,this.mode==='webgl'?80:28),this.materials.wood);
       wood.rotation.z=-Math.PI/2;wood.name='solid-maple-bat';this.batMesh=wood;
 
@@ -171,6 +172,14 @@
         lead,follow,miss,failureStyle,row,column,name:row<2?'high':row===2?'middle':'low',
         swingDuration:Math.min(lead,120),swingStart:lead-Math.min(lead,120),
         revealTime:lead-Math.min(lead,120)};
+    }
+    // Project the physical bat at contact without moving the live swing rig or drawing an outcome.
+    contactPreview(target,row,column){
+      if(!this.outlineProfile)return null;
+      const g=this.configure(target,360,180,false,row,column),pose=this.sample(g,g.lead);
+      const up=pose.normal.clone().cross(pose.direction).normalize();
+      const edge=sign=>this.outlineProfile.map(p=>this.project(pose.grip.clone().addScaledVector(pose.direction,p.x).addScaledVector(up,p.radius*sign)));
+      return {outline:[...edge(1),...edge(-1).reverse()],contact:this.project(pose.contact)};
     }
     angleAt(g,time){
       const hermite=(a,b,ma,mb,t)=>{const t2=t*t,t3=t2*t;return(2*t3-3*t2+1)*a+(t3-2*t2+t)*ma+(-2*t3+3*t2)*b+(t3-t2)*mb;};

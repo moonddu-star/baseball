@@ -338,6 +338,41 @@ function createGameView({ $, game, surface, isBusy, onSwing }) {
   return { board, tiles, message, readBet, render, holdRewards, animateRewards, cancelRewards };
 }
 
+// Source: poc/src/game/ui/bat-aim-guide.js
+function createBatAimGuide({ $, tiles, stage, batRig, game, isBusy }) {
+  const guide=$('bat-aim-guide'), outline=$('bat-aim-outline'), point=$('bat-aim-point');
+  let selected=null, touchInput=false;
+  function hide(){
+    guide.setAttribute('hidden','');
+    if(selected)selected.classList.remove('aimed');
+    selected=null;
+  }
+  function show(tile,index){
+    if(game.status!=='playing'||isBusy()||tile.disabled||document.querySelector('dialog[open]')){hide();return;}
+    const rect=tile.getBoundingClientRect(),field=stage.getBoundingClientRect();
+    const preview=batRig.contactPreview({x:rect.left+rect.width/2-field.left,y:rect.top+rect.height/2-field.top},Math.floor(index/5),index%5);
+    if(!preview){hide();return;}
+    if(selected!==tile){hide();selected=tile;tile.classList.add('aimed');}
+    guide.setAttribute('viewBox','0 0 '+field.width+' '+field.height);
+    outline.setAttribute('d',preview.outline.map((p,i)=>(i?'L':'M')+p.x.toFixed(2)+' '+p.y.toFixed(2)).join(' ')+' Z');
+    point.setAttribute('transform','translate('+preview.contact.x+' '+preview.contact.y+')');
+    guide.dataset.zone=String(index);guide.removeAttribute('hidden');
+  }
+  tiles.forEach((tile,index)=>{
+    tile.addEventListener('pointermove',event=>{if(event.pointerType==='mouse'||event.pointerType==='pen'){touchInput=false;show(tile,index);}});
+    tile.addEventListener('pointerenter',event=>{if(event.pointerType==='mouse'||event.pointerType==='pen'){touchInput=false;show(tile,index);}});
+    tile.addEventListener('pointerleave',hide);
+    tile.addEventListener('focus',()=>{if(!touchInput&&tile.matches(':focus-visible'))show(tile,index);});
+    tile.addEventListener('blur',hide);
+  });
+  document.addEventListener('pointerdown',event=>{touchInput=event.pointerType==='touch';hide();},true);
+  document.addEventListener('keydown',()=>{touchInput=false;},true);
+  document.addEventListener('visibilitychange',hide);
+  window.addEventListener('blur',hide);
+  window.addEventListener('resize',hide);
+  return {hide};
+}
+
 // Source: poc/src/game/ui/difficulty-panel.js
 function createDifficultyPanel({ $, game, render: renderGame, prepareRound }) {
   const panel = $('difficulty-panel'), balance = MinesEngine.balance;
@@ -801,13 +836,14 @@ const pitcherAura = createPitcherAura({ canvas: $('pitcher-aura'), surface: stag
 const audio = createGameAudio({ celebrationFiles: { 'extra-base': 'assets/sfx-cheer-normal.mp3', 'home-run': 'assets/sfx-cheer-strong.mp3', win: null } });
 const { tone } = audio;
 const { tiles, message, readBet, render: renderView, holdRewards, animateRewards, cancelRewards } = createGameView({ $, game, surface, isBusy: () => busy, onSwing: i => swing(i) });
+const aimGuide = createBatAimGuide({ $, tiles, stage, batRig, game, isBusy: () => busy });
 const history = createPlayHistory();
 createHistoryPanel({ $, history, getDifficulty: () => game.difficulty });
 createDifficultyPanel({ $, game, render, prepareRound });
 const { showResult } = createResultPanel({ $, game, getRoundNumber: () => roundNumber });
 const { flash, clearEffects, windPitch, followPitch, releasePoint, hitDestination, swingBat, animateBall } = createPitchEffects({ $, surface: stage, batRig, phaseSurface: surface });
 function render() {
-  renderView();
+  renderView(); aimGuide.hide();
   history.sync(game.snapshot(), game.triggered);
   $('history').disabled = busy;
   audio.setRoundActive(game.status !== 'ready');
@@ -828,7 +864,9 @@ function prepareRound() {
   if (busy || game.status === 'playing') throw Error('Finish the current round first.');
   if ($('result').open) $('result').close();
   game.prepare();
-  clearEffects(); render(); message('SET YOUR BET'); $('bet').focus({ preventScroll: true });
+  clearEffects(); render(); message('SET YOUR BET');
+  // Keep mobile keyboards closed until the player explicitly taps the bet input.
+  $('action').focus({ preventScroll: true });
 }
 function startRound() {
   if (busy) throw Error('A swing is in progress. Please wait.');

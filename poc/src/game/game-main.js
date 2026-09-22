@@ -10,13 +10,14 @@ const pitcherAura = createPitcherAura({ canvas: $('pitcher-aura'), surface: stag
 const audio = createGameAudio({ celebrationFiles: { 'extra-base': 'assets/sfx-cheer-normal.mp3', 'home-run': 'assets/sfx-cheer-strong.mp3', win: null } });
 const { tone } = audio;
 const { tiles, message, readBet, render: renderView, holdRewards, animateRewards, cancelRewards } = createGameView({ $, game, surface, isBusy: () => busy, onSwing: i => swing(i) });
+const aimGuide = createBatAimGuide({ $, tiles, stage, batRig, game, isBusy: () => busy });
 const history = createPlayHistory();
 createHistoryPanel({ $, history, getDifficulty: () => game.difficulty });
 createDifficultyPanel({ $, game, render, prepareRound });
 const { showResult } = createResultPanel({ $, game, getRoundNumber: () => roundNumber });
 const { flash, clearEffects, windPitch, followPitch, releasePoint, hitDestination, swingBat, animateBall } = createPitchEffects({ $, surface: stage, batRig, phaseSurface: surface });
 function render() {
-  renderView();
+  renderView(); aimGuide.hide();
   history.sync(game.snapshot(), game.triggered);
   $('history').disabled = busy;
   audio.setRoundActive(game.status !== 'ready');
@@ -37,7 +38,9 @@ function prepareRound() {
   if (busy || game.status === 'playing') throw Error('Finish the current round first.');
   if ($('result').open) $('result').close();
   game.prepare();
-  clearEffects(); render(); message('SET YOUR BET'); $('bet').focus({ preventScroll: true });
+  clearEffects(); render(); message('SET YOUR BET');
+  // Keep mobile keyboards closed until the player explicitly taps the bet input.
+  $('action').focus({ preventScroll: true });
 }
 function startRound() {
   if (busy) throw Error('A swing is in progress. Please wait.');
